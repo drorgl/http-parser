@@ -1,37 +1,8 @@
-HTTP Parser
-===========
+# HTTP Parser Developer Usage
 
-[![Status](https://github.com/drorgl/http-parser/actions/workflows/platformio-test.yml/badge.svg)](https://github.com/drorgl/http-parser/actions/workflows/platformio-test.yml)
+This document details how to integrate and use the HTTP Parser library in your application.
 
-This is a parser for HTTP messages written in C. It parses both requests and
-responses. The parser is designed to be used in performance HTTP
-applications. It does not make any syscalls nor allocations, it does not
-buffer data, it can be interrupted at anytime. Depending on your
-architecture, it only requires about 40 bytes of data per message
-stream (in a web server that is per connection).
-
-Features:
-
-  * No dependencies
-  * Handles persistent streams (keep-alive).
-  * Decodes chunked encoding.
-  * Upgrade support
-  * Defends against buffer overflow attacks.
-
-The parser extracts the following information from HTTP messages:
-
-  * Header fields and values
-  * Content-Length
-  * Request method
-  * Response status code
-  * Transfer-Encoding
-  * HTTP version
-  * Request URL
-  * Message body
-
-
-Usage
------
+## Usage
 
 One `http_parser` object is used per TCP connection. Initialize the struct
 using `http_parser_init()` and set the callbacks. That might look something
@@ -90,8 +61,7 @@ transparently. That is, a chunked encoding is decoded before being sent to
 the on_body callback.
 
 
-The Special Problem of Upgrade
-------------------------------
+## The Special Problem of Upgrade
 
 `http_parser` supports upgrading the connection to a different protocol. An
 increasingly common example of this is the WebSocket protocol which sends
@@ -118,8 +88,7 @@ The user is expected to check if `parser->upgrade` has been set to 1 after
 offset by the return value of `http_parser_execute()`.
 
 
-Callbacks
----------
+## Callbacks
 
 During the `http_parser_execute()` call, the callbacks set in
 `http_parser_settings` will be executed. The parser maintains state and
@@ -136,6 +105,55 @@ There are two types of callbacks:
 
 Callbacks must return 0 on success. Returning a non-zero value indicates
 error to the parser, making it exit immediately.
+
+### Callback Sequence Flow
+
+The parser executes callbacks in a specific order. This flow diagram illustrates the typical sequence for a single message:
+
+```mermaid
+graph TD
+    A[Start http_parser_execute] --> B(on_message_begin);
+    B --> C{Message Type?};
+    C -- Request --> D(on_url);
+    C -- Response --> E(on_status);
+    D --> F(on_header_field);
+    E --> F;
+    F --> G(on_header_value);
+    G --> H{More Headers?};
+    H -- Yes --> F;
+    H -- No --> I(on_headers_complete);
+    I --> J{Has Body?};
+    J -- Yes, Chunked --> K(on_chunk_header);
+    J -- Yes, Identity/Content-Length --> L(on_body);
+    J -- No Body --> P(on_message_complete);
+    K --> L;
+    L --> M{More Body Chunks?};
+    M -- Yes --> L;
+    M -- No --> N(on_chunk_complete);
+    N --> O{Last Chunk?};
+    O -- No --> K;
+    O -- Yes --> P;
+    P --> Q[End of Message];
+```
+
+### Detailed Callback Descriptions
+
+The `http_parser_settings` structure defines the following callbacks:
+
+| Callback | Type | Description |
+| :--- | :--- | :--- |
+| `on_message_begin` | `http_cb` | Called at the start of a new HTTP message. |
+| `on_url` | `http_data_cb` | Called for request URLs. May be called multiple times for a single URL. |
+| `on_status` | `http_data_cb` | Called for response status text (e.g., "OK", "Not Found"). May be called multiple times. |
+| `on_header_field` | `http_data_cb` | Called for header field names. May be called multiple times for a single field name. |
+| `on_header_value` | `http_data_cb` | Called for header field values. May be called multiple times for a single value. |
+| `on_headers_complete` | `http_cb` | Called after all headers are parsed. Returning `1` skips the body (e.g., for HEAD responses). Returning `2` skips the body and signals connection close (e.g., for CONNECT responses). |
+| `on_body` | `http_data_cb` | Called for the message body. May be called multiple times. |
+| `on_message_complete` | `http_cb` | Called when the entire message is parsed. |
+| `on_chunk_header` | `http_cb` | Called when a chunk header is parsed. `parser->content_length` holds the chunk size. |
+| `on_chunk_complete` | `http_cb` | Called when a chunk is fully parsed. |
+
+> **Note:** Data callbacks (`http_data_cb`) may be called multiple times for a single logical element (URL, header field, header value, body) if the data is streamed to the parser in chunks. You must buffer the data across multiple calls if you need the complete value.
 
 For cases where it is necessary to pass local information to/from a callback,
 the `http_parser` object's `data` field can be used.
@@ -231,52 +249,16 @@ and apply the following logic:
     |                        |            | and append callback data to it             |
      ------------------------ ------------ --------------------------------------------
 
-[Additional Usage Information](./lib/http-parser/usage.md)
 
-Parsing URLs
-------------
+## Parsing URLs
 
 A simplistic zero-copy URL parser is provided as `http_parser_parse_url()`.
 Users of this library may wish to use it to parse URLs constructed from
 consecutive `on_url` callbacks.
+It is important to note that `http_parser_parse_url()` only extracts the raw, percent-encoded components (e.g., `%20` for space) from the URL string. It does **not** perform URL decoding (percent-decoding). Developers must implement their own decoding logic if they require the decoded values for components like the path, query, or fragment.
 
 See examples of reading in headers:
 
 * [partial example](http://gist.github.com/155877) in C
 * [from http-parser tests](http://github.com/joyent/http-parser/blob/37a0ff8/test.c#L403) in C
 * [from Node library](http://github.com/joyent/node/blob/842eaf4/src/http.js#L284) in Javascript
-
-
-## Running Tests
-
-### General Tests
-
-To run all configured tests:
-
-```bash
-pio test
-```
-
-### Specific Unit Tests (http-parser-2.9.4)
-
-To specifically target the unit tests located in `test/test_http-parser-2.9.4/`:
-
-```bash
-pio test -f test_http-parser-2.9.4
-```
-
-## Running Benchmarks
-
-To run the specific HTTP parser benchmarks and ensure all output is visible (as info messages are filtered by default in standard test runs), use the following command:
-
-```bash
-pio test -vvv -f test_http-parser-bench-2.9.4
-```
-
-The `-vvv` flag ensures verbose output, and `-f test_http-parser-bench-2.9.4` targets the specific benchmark suite.
-
-
-# References
-- [source](https://github.com/nodejs/http-parser)
-- [rtsp support](https://github.com/yapingcat/http-parser) [or](https://github.com/ploxiln/http-parser)
-- 
