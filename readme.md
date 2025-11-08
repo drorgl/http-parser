@@ -246,6 +246,35 @@ See examples of reading in headers:
 * [from Node library](http://github.com/joyent/node/blob/842eaf4/src/http.js#L284) in Javascript
 
 
+## Running Tests
+
+### General Tests
+
+To run all configured tests:
+
+```bash
+pio test
+```
+
+### Specific Unit Tests (http-parser-2.9.4)
+
+To specifically target the unit tests located in `test/test_http-parser-2.9.4/`:
+
+```bash
+pio test -f test_http-parser-2.9.4
+```
+
+## Running Benchmarks
+
+To run the specific HTTP parser benchmarks and ensure all output is visible (as info messages are filtered by default in standard test runs), use the following command:
+
+```bash
+pio test -vvv -f test_http-parser-bench-2.9.4
+```
+
+The `-vvv` flag ensures verbose output, and `-f test_http-parser-bench-2.9.4` targets the specific benchmark suite.
+
+
 # References
 - [source](https://github.com/nodejs/http-parser)
 - [rtsp support](https://github.com/yapingcat/http-parser) [or](https://github.com/ploxiln/http-parser)
