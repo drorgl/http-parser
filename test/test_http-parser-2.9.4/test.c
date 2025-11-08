@@ -4987,6 +4987,79 @@ for (int i = 0; i < ARRAY_SIZE(requests); i++) {
   }
 }
 
+/* Individual test functions for commented out test cases that should produce errors */
+
+void test_header_space_before_colon(void) {
+  test_simple_type("GET / HTTP/1.1\r\n"
+                   "Header-Name : Value\r\n"
+                   "\r\n",
+                   HPE_INVALID_HEADER_TOKEN,
+                   HTTP_REQUEST);
+}
+
+void test_chunked_zero_length_middle(void) {
+  test_simple_type("POST / HTTP/1.1\r\n"
+                   "Transfer-Encoding: chunked\r\n"
+                   "\r\n"
+                   "5\r\nhello\r\n"
+                   "0\r\n"
+                   "6\r\n world\r\n"
+                   "0\r\n"
+                   "\r\n",
+                   HPE_OK,
+                   HTTP_REQUEST);
+}
+
+void test_content_length_zero_with_body(void) {
+  test_simple_type("POST / HTTP/1.1\r\n"
+                   "Content-Length: 0\r\n"
+                   "\r\n"
+                   "body",
+                   HPE_OK,
+                   HTTP_REQUEST);
+}
+
+void test_chunked_no_chunks(void) {
+  test_simple_type("POST / HTTP/1.1\r\n"
+                   "Transfer-Encoding: chunked\r\n"
+                   "\r\n"
+                   "0\r\n"
+                   "\r\n",
+                   HPE_OK,
+                   HTTP_REQUEST);
+}
+
+void test_http09_simple_request(void) {
+  test_simple_type("GET /simple.txt\r\n",
+                   HPE_OK,
+                   HTTP_REQUEST);
+}
+
+void test_invalid_data_mid_message(void) {
+  test_simple_type("GET / HTTP/1.1\r\n"
+                   "Foo: bar\r\n"
+                   "Invalid\x01Header: value\r\n"
+                   "Valid: header\r\n"
+                   "\r\n",
+                   HPE_INVALID_HEADER_TOKEN,
+                   HTTP_REQUEST);
+}
+
+void test_malformed_scheme_url(void) {
+  test_simple_type("GET http:/example.com HTTP/1.1\r\n\r\n",
+                   HPE_INVALID_URL,
+                   HTTP_REQUEST);
+}
+
+void test_complex_upgrade_tls(void) {
+  test_simple_type("GET / HTTP/1.1\r\n"
+                   "Connection: Upgrade, Keep-Alive\r\n"
+                   "Upgrade: TLS/1.0, HTTP/1.1\r\n"
+                   "\r\n"
+                   "TLS data follows",
+                   HPE_OK,
+                   HTTP_REQUEST);
+}
 
 int
 main (void)
@@ -5073,6 +5146,15 @@ main (void)
   RUN_TEST(test_request_scan_2_4);
   RUN_TEST(test_request_scan_3_4);
   RUN_TEST(test_request_scan_4_4);
+  RUN_TEST(test_header_space_before_colon);
+  RUN_TEST(test_chunked_zero_length_middle);
+  RUN_TEST(test_content_length_zero_with_body);
+  RUN_TEST(test_chunked_no_chunks);
+  RUN_TEST(test_http09_simple_request);
+  RUN_TEST(test_invalid_data_mid_message);
+  RUN_TEST(test_malformed_scheme_url);
+  RUN_TEST(test_complex_upgrade_tls);
+  
   return UNITY_END();
 }
 
