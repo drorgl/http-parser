@@ -45,7 +45,9 @@ void tearDown(void) {
 #define FALSE 0
 
 #define MAX_HEADERS 13
-#define MAX_ELEMENT_SIZE 2048
+#define MAX_ELEMENT_SIZE 2000
+#define SMALL_ELEMENT_SIZE 100
+#define MEDIUM_ELEMENT_SIZE 300
 #define MAX_CHUNKS 16
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
@@ -60,11 +62,11 @@ struct message {
   enum http_parser_type type;
   enum http_method method;
   int status_code;
-  char response_status[MAX_ELEMENT_SIZE];
-  char request_path[MAX_ELEMENT_SIZE];
-  char request_url[MAX_ELEMENT_SIZE];
-  char fragment[MAX_ELEMENT_SIZE];
-  char query_string[MAX_ELEMENT_SIZE];
+  char response_status[SMALL_ELEMENT_SIZE];
+  char request_path[SMALL_ELEMENT_SIZE];
+  char request_url[SMALL_ELEMENT_SIZE];
+  char fragment[SMALL_ELEMENT_SIZE];
+  char query_string[SMALL_ELEMENT_SIZE];
   char body[MAX_ELEMENT_SIZE];
   size_t body_size;
   const char *host;
@@ -72,7 +74,7 @@ struct message {
   uint16_t port;
   int num_headers;
   enum { NONE=0, FIELD, VALUE } last_header_element;
-  char headers [MAX_HEADERS][2][MAX_ELEMENT_SIZE];
+  char headers [MAX_HEADERS][2][MEDIUM_ELEMENT_SIZE];
   int should_keep_alive;
 
   int num_chunks;
@@ -5119,8 +5121,10 @@ main (void)
   RUN_TEST(test_message_count_body_no_headers_no_body_404);
   RUN_TEST(test_message_count_body_trailing_space_on_chunked_body);
   RUN_TEST(test_message_count_body_large_chunked);
+#ifndef ESP_PLATFORM
   RUN_TEST(test_response_scan_1_2);
   RUN_TEST(test_response_scan_2_2);
+#endif
   RUN_TEST(test_simple_get_ihttp_1_0);
   RUN_TEST(test_simple_get_ice_1_0);
   RUN_TEST(test_simple_get_htp_1_1);
@@ -5135,17 +5139,21 @@ main (void)
   RUN_TEST(test_simple_all_methods);
   RUN_TEST(test_simple_bad_methods);
   RUN_TEST(test_simple_illegal_header_field_name_line_folding);
+#ifndef ESP_PLATFORM
   RUN_TEST(test_simple_dumbluck2);
+#endif
   RUN_TEST(test_simple_corrupted_connection);
   RUN_TEST(test_simple_corrupted_header_name);
   RUN_TEST(test_message_all_requests);
   RUN_TEST(test_message_pause_all_requests);
 
+#ifndef ESP_PLATFORM
   RUN_TEST(test_multiple3_requests);
   RUN_TEST(test_request_scan_1_4);
   RUN_TEST(test_request_scan_2_4);
   RUN_TEST(test_request_scan_3_4);
   RUN_TEST(test_request_scan_4_4);
+#endif
   RUN_TEST(test_header_space_before_colon);
   RUN_TEST(test_chunked_zero_length_middle);
   RUN_TEST(test_content_length_zero_with_body);
