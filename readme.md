@@ -278,5 +278,4 @@ The `-vvv` flag ensures verbose output, and `-f test_http-parser-bench-2.9.4` ta
 
 # References
 - [source](https://github.com/nodejs/http-parser)
-- [rtsp support](https://github.com/yapingcat/http-parser) [or](https://github.com/ploxiln/http-parser)
-- 
+- rtsp support [yapingcat/http-parser](https://github.com/yapingcat/http-parser) or [ploxiln/http-parser](https://github.com/ploxiln/http-parser)
