@@ -1255,6 +1255,226 @@ const struct message requests[] =
   ,.num_chunks_complete= 2
   ,.chunk_lengths= { 0x1e }
   }
+
+/* Additional test cases for enhanced coverage */
+#define URL_SPECIAL_CHARS 45
+, {.name= "URL with special characters"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET /path/~!*()_+-=.;,:'@$[]{}| HTTP/1.1\r\n\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= "/path/~!*()_+-=.;,:'@$[]{}|"
+  ,.request_url= "/path/~!*()_+-=.;,:'@$[]{}|"
+  ,.num_headers= 0
+  ,.body= ""
+  }
+
+#define URL_ENCODED_CHARS 46
+, {.name= "URL with encoded characters"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET /path/%20%23%24%25%26%2B HTTP/1.1\r\n\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= "/path/%20%23%24%25%26%2B"
+  ,.request_url= "/path/%20%23%24%25%26%2B"
+  ,.num_headers= 0
+  ,.body= ""
+  }
+
+#define URL_MULTIPLE_SLASHES 47
+, {.name= "URL with multiple slashes"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET //path///to/resource HTTP/1.1\r\n\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= "//path///to/resource"
+  ,.request_url= "//path///to/resource"
+  ,.num_headers= 0
+  ,.body= ""
+  }
+
+#define URL_EMPTY_PATH_SEGMENTS 48
+, {.name= "URL with empty path segments"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET /./path/./resource HTTP/1.1\r\n\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= "/./path/./resource"
+  ,.request_url= "/./path/./resource"
+  ,.num_headers= 0
+  ,.body= ""
+  }
+
+#define URL_DIRECTORY_TRAVERSAL 49
+, {.name= "URL directory traversal"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET /path/../resource HTTP/1.1\r\n\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= "/path/../resource"
+  ,.request_url= "/path/../resource"
+  ,.num_headers= 0
+  ,.body= ""
+  }
+
+#define HEADER_SPACES_IN_VALUE 51
+, {.name= "Header with spaces in value"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET / HTTP/1.1\r\n"
+         "X-Custom-Header:   value with spaces   \r\n"
+         "\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= "/"
+  ,.request_url= "/"
+  ,.num_headers= 1
+  ,.headers=
+    { { "X-Custom-Header", "value with spaces   " }
+    }
+  ,.body= ""
+  }
+
+#define HEADER_TABS_IN_VALUE 52
+, {.name= "Header with tabs in value"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET / HTTP/1.1\r\n"
+         "X-Tab-Header: Value\twith\tTabs\r\n"
+         "\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= "/"
+  ,.request_url= "/"
+  ,.num_headers= 1
+  ,.headers=
+    { { "X-Tab-Header", "Value\twith\tTabs" }
+    }
+  ,.body= ""
+  }
+
+#define DUPLICATE_SET_COOKIE 53
+, {.name= "Duplicate Set-Cookie headers"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET / HTTP/1.1\r\n"
+         "Set-Cookie: session=abc123\r\n"
+         "Set-Cookie: user=john\r\n"
+         "\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= "/"
+  ,.request_url= "/"
+  ,.num_headers= 2
+  ,.headers=
+    { { "Set-Cookie", "session=abc123" }
+    , { "Set-Cookie", "user=john" }
+    }
+  ,.body= ""
+  }
+
+#define HEADER_EMPTY_VALUE 54
+, {.name= "Header with empty value"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET / HTTP/1.1\r\n"
+         "X-Empty-Header:\r\n"
+         "\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= "/"
+  ,.request_url= "/"
+  ,.num_headers= 1
+  ,.headers=
+    { { "X-Empty-Header", "" }
+    }
+  ,.body= ""
+  }
+
+#define HEADER_EMPTY_VALUE_WITH_SPACE 55
+, {.name= "Header with empty value and space"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET / HTTP/1.1\r\n"
+         "X-Empty-Header: \r\n"
+         "\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= "/"
+  ,.request_url= "/"
+  ,.num_headers= 1
+  ,.headers=
+    { { "X-Empty-Header", "" }
+    }
+  ,.body= ""
+  }
+
+#define HTTP_10_KEEPALIVE_MULTIPLE 60
+, {.name= "HTTP/1.0 keep-alive request 1"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET / HTTP/1.0\r\n"
+         "Connection: keep-alive\r\n"
+         "\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 0
+  ,.method= HTTP_GET
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= "/"
+  ,.request_url= "/"
+  ,.num_headers= 1
+  ,.headers=
+    { { "Connection", "keep-alive" }
+    }
+  ,.body= ""
+  }
 };
 
 /* * R E S P O N S E S * */
@@ -2788,6 +3008,9 @@ upgrade_message_fix(char *body, const size_t nread, const size_t nmsgs, ...) {
       if (!check_str_eq(m, "upgrade", body + off, body + nread)) {
         /* The check_str_eq function already handles reporting the error. */
       }
+      if (!check_str_eq(m, "upgrade", body + off, body + nread)) {
+        /* The check_str_eq function already handles reporting the error. */
+      }
 
       /* Fix up the response so that message_eq() will verify the beginning
        * of the upgrade */
@@ -3370,6 +3593,25 @@ const struct url_test url_tests[] =
   ,.url="  "
   ,.is_connect=0
   ,.rv=1
+  }
+
+, {.name="URL with multiple consecutive slashes"
+  ,.url="//path///to/resource"
+  ,.is_connect=0
+  ,.u=
+    {.field_set=(1 << UF_PATH)
+    ,.port=0
+    ,.field_data=
+      {{  0,  0 } /* UF_SCHEMA */
+      ,{  0,  0 } /* UF_HOST */
+      ,{  0,  0 } /* UF_PORT */
+      ,{  0, 20 } /* UF_PATH */
+      ,{  0,  0 } /* UF_QUERY */
+      ,{  0,  0 } /* UF_FRAGMENT */
+      ,{  0,  0 } /* UF_USERINFO */
+      }
+    }
+  ,.rv=0
   }
 
 #if HTTP_PARSER_STRICT
@@ -4830,7 +5072,7 @@ main (void)
   RUN_TEST(test_request_scan_1_4);
   RUN_TEST(test_request_scan_2_4);
   RUN_TEST(test_request_scan_3_4);
-  RUN_TEST(test_request_scan_4_4);  
+  RUN_TEST(test_request_scan_4_4);
   return UNITY_END();
 }
 
