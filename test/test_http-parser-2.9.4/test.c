@@ -25,10 +25,19 @@
 #include <stdlib.h> /* rand */
 #include <string.h>
 #include <stdarg.h>
+#include "unity.h"
 
 #if defined(__APPLE__)
 # undef strlncpy
 #endif  /* defined(__APPLE__) */
+
+void setUp(void) {
+  // set stuff up here
+}
+
+void tearDown(void) {
+  // clean stuff up here
+}
 
 #undef TRUE
 #define TRUE 1
@@ -2152,11 +2161,9 @@ void
 check_body_is_final (const http_parser *p)
 {
   if (messages[num_messages].body_is_final) {
-    fprintf(stderr, "\n\n *** Error http_body_is_final() should return 1 "
+    TEST_FAIL_MESSAGE("Error http_body_is_final() should return 1 "
                     "on last on_body callback call "
-                    "but it doesn't! ***\n\n");
-    assert(0);
-    abort();
+                    "but it doesn't!");
   }
   messages[num_messages].body_is_final = http_body_is_final(p);
 }
@@ -2214,22 +2221,18 @@ message_complete_cb (http_parser *p)
   if (messages[num_messages].should_keep_alive !=
       http_should_keep_alive(&parser))
   {
-    fprintf(stderr, "\n\n *** Error http_should_keep_alive() should have same "
+    TEST_FAIL_MESSAGE("Error http_should_keep_alive() should have same "
                     "value in both on_message_complete and on_headers_complete "
-                    "but it doesn't! ***\n\n");
-    assert(0);
-    abort();
+                    "but it doesn't!");
   }
 
   if (messages[num_messages].body_size &&
       http_body_is_final(p) &&
       !messages[num_messages].body_is_final)
   {
-    fprintf(stderr, "\n\n *** Error http_body_is_final() should return 1 "
+    TEST_FAIL_MESSAGE("Error http_body_is_final() should return 1 "
                     "on last on_body callback call "
-                    "but it doesn't! ***\n\n");
-    assert(0);
-    abort();
+                    "but it doesn't!");
   }
 
   messages[num_messages].message_complete_cb_called = TRUE;
@@ -2289,83 +2292,72 @@ int
 dontcall_message_begin_cb (http_parser *p)
 {
   if (p) { } // gcc
-  fprintf(stderr, "\n\n*** on_message_begin() called on paused parser ***\n\n");
-  abort();
+  TEST_FAIL_MESSAGE("on_message_begin() called on paused parser");
 }
 
 int
 dontcall_header_field_cb (http_parser *p, const char *buf, size_t len)
 {
   if (p || buf || len) { } // gcc
-  fprintf(stderr, "\n\n*** on_header_field() called on paused parser ***\n\n");
-  abort();
+  TEST_FAIL_MESSAGE("on_header_field() called on paused parser");
 }
 
 int
 dontcall_header_value_cb (http_parser *p, const char *buf, size_t len)
 {
   if (p || buf || len) { } // gcc
-  fprintf(stderr, "\n\n*** on_header_value() called on paused parser ***\n\n");
-  abort();
+  TEST_FAIL_MESSAGE("on_header_value() called on paused parser");
 }
 
 int
 dontcall_request_url_cb (http_parser *p, const char *buf, size_t len)
 {
   if (p || buf || len) { } // gcc
-  fprintf(stderr, "\n\n*** on_request_url() called on paused parser ***\n\n");
-  abort();
+  TEST_FAIL_MESSAGE("on_request_url() called on paused parser");
 }
 
 int
 dontcall_body_cb (http_parser *p, const char *buf, size_t len)
 {
   if (p || buf || len) { } // gcc
-  fprintf(stderr, "\n\n*** on_body_cb() called on paused parser ***\n\n");
-  abort();
+  TEST_FAIL_MESSAGE("on_body_cb() called on paused parser");
 }
 
 int
 dontcall_headers_complete_cb (http_parser *p)
 {
   if (p) { } // gcc
-  fprintf(stderr, "\n\n*** on_headers_complete() called on paused "
-                  "parser ***\n\n");
-  abort();
+  TEST_FAIL_MESSAGE("on_headers_complete() called on paused "
+                  "parser");
 }
 
 int
 dontcall_message_complete_cb (http_parser *p)
 {
   if (p) { } // gcc
-  fprintf(stderr, "\n\n*** on_message_complete() called on paused "
-                  "parser ***\n\n");
-  abort();
+  TEST_FAIL_MESSAGE("on_message_complete() called on paused "
+                  "parser");
 }
 
 int
 dontcall_response_status_cb (http_parser *p, const char *buf, size_t len)
 {
   if (p || buf || len) { } // gcc
-  fprintf(stderr, "\n\n*** on_status() called on paused parser ***\n\n");
-  abort();
+  TEST_FAIL_MESSAGE("on_status() called on paused parser");
 }
 
 int
 dontcall_chunk_header_cb (http_parser *p)
 {
   if (p) { } // gcc
-  fprintf(stderr, "\n\n*** on_chunk_header() called on paused parser ***\n\n");
-  exit(1);
+  TEST_FAIL_MESSAGE("on_chunk_header() called on paused parser");
 }
 
 int
 dontcall_chunk_complete_cb (http_parser *p)
 {
   if (p) { } // gcc
-  fprintf(stderr, "\n\n*** on_chunk_complete() "
-          "called on paused parser ***\n\n");
-  exit(1);
+  TEST_FAIL_MESSAGE("on_chunk_complete() called on paused parser");
 }
 
 static http_parser_settings settings_dontcall =
@@ -2593,15 +2585,25 @@ check_str_eq (const struct message *m,
               const char *expected,
               const char *found) {
   if ((expected == NULL) != (found == NULL)) {
-    printf("\n*** Error: %s in '%s' ***\n\n", prop, m->name);
-    printf("expected %s\n", (expected == NULL) ? "NULL" : expected);
-    printf("   found %s\n", (found == NULL) ? "NULL" : found);
+    char buf[200];
+    snprintf(buf, sizeof(buf), " Error: %s in '%s' ", prop, m->name);
+    TEST_MESSAGE(buf);
+
+    snprintf(buf, sizeof(buf), "expected %s ", (expected == NULL) ? "NULL" : expected);
+    TEST_MESSAGE(buf);
+
+    snprintf(buf, sizeof(buf), "   found %s ", (found == NULL) ? "NULL" : found);
+    TEST_MESSAGE(buf);
     return 0;
   }
   if (expected != NULL && 0 != strcmp(expected, found)) {
-    printf("\n*** Error: %s in '%s' ***\n\n", prop, m->name);
-    printf("expected '%s'\n", expected);
-    printf("   found '%s'\n", found);
+    char buf[200];
+    snprintf(buf, sizeof(buf)," Error: %s in '%s' ", prop, m->name);
+    TEST_MESSAGE(buf);
+    snprintf(buf, sizeof(buf),"expected '%s' ", expected);
+    TEST_MESSAGE(buf);
+    snprintf(buf, sizeof(buf),"   found '%s' ", found);
+    TEST_MESSAGE(buf);
     return 0;
   }
   return 1;
@@ -2613,9 +2615,13 @@ check_num_eq (const struct message *m,
               int expected,
               int found) {
   if (expected != found) {
-    printf("\n*** Error: %s in '%s' ***\n\n", prop, m->name);
-    printf("expected %d\n", expected);
-    printf("   found %d\n", found);
+    char buf[200];
+    snprintf(buf, sizeof(buf), " Error: %s in '%s' ", prop, m->name);
+    TEST_MESSAGE(buf);
+    snprintf(buf, sizeof(buf), "expected %d ", expected);
+    TEST_MESSAGE(buf);
+    snprintf(buf, sizeof(buf), "   found %d ", found);
+    TEST_MESSAGE(buf);
     return 0;
   }
   return 1;
@@ -2678,9 +2684,9 @@ message_eq (int index, int connect, const struct message *expected)
     struct http_parser_url u;
 
     if (http_parser_parse_url(m->request_url, strlen(m->request_url), 0, &u)) {
-      fprintf(stderr, "\n\n*** failed to parse URL %s ***\n\n",
-        m->request_url);
-      abort();
+      char fail_msg_buf[4096];
+      snprintf(fail_msg_buf, sizeof(fail_msg_buf), "failed to parse URL %s", m->request_url);
+      TEST_FAIL_MESSAGE(fail_msg_buf);
     }
 
     if (expected->host) {
@@ -2780,7 +2786,7 @@ upgrade_message_fix(char *body, const size_t nread, const size_t nmsgs, ...) {
 
       /* Check the portion of the response after its specified upgrade */
       if (!check_str_eq(m, "upgrade", body + off, body + nread)) {
-        abort();
+        /* The check_str_eq function already handles reporting the error. */
       }
 
       /* Fix up the response so that message_eq() will verify the beginning
@@ -2794,15 +2800,14 @@ upgrade_message_fix(char *body, const size_t nread, const size_t nmsgs, ...) {
   }
 
   va_end(ap);
-  printf("\n\n*** Error: expected a message with upgrade ***\n");
-
-  abort();
+  TEST_FAIL_MESSAGE("Error: expected a message with upgrade");
 }
 
 static void
 print_error (const char *raw, size_t error_location)
 {
-  fprintf(stderr, "\n*** %s ***\n\n",
+  char buf[2000] = {0};
+  snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "-%s-",
           http_errno_description(HTTP_PARSER_ERRNO(&parser)));
 
   int this_line = 0, char_len = 0;
@@ -2812,11 +2817,11 @@ print_error (const char *raw, size_t error_location)
     switch (raw[i]) {
       case '\r':
         char_len = 2;
-        fprintf(stderr, "\\r");
+        snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "\\r");
         break;
 
       case '\n':
-        fprintf(stderr, "\\n\n");
+        snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "\\n\n");
 
         if (this_line) goto print;
 
@@ -2825,19 +2830,23 @@ print_error (const char *raw, size_t error_location)
 
       default:
         char_len = 1;
-        fputc(raw[i], stderr);
+        snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "%c", raw[i]);
         break;
     }
     if (!this_line) error_location_line += char_len;
   }
 
-  fprintf(stderr, "[eof]\n");
+  snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "[eof]\n");
+  TEST_MESSAGE(buf);
 
+  memset(buf, 0, sizeof(buf));
  print:
   for (j = 0; j < error_location_line; j++) {
     fputc(' ', stderr);
+    snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), " ");
   }
-  fprintf(stderr, "^\n\nerror location: %u\n", (unsigned int)error_location);
+  snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "^ error location: %u", (unsigned int)error_location);
+  TEST_MESSAGE(buf);
 }
 
 void
@@ -2848,8 +2857,7 @@ test_preserve_data (void)
   parser.data = my_data;
   http_parser_init(&parser, HTTP_REQUEST);
   if (parser.data != my_data) {
-    printf("\n*** parser.data not preserved accross http_parser_init ***\n\n");
-    abort();
+    TEST_FAIL_MESSAGE("parser.data not preserved accross http_parser_init");
   }
 }
 
@@ -3419,19 +3427,24 @@ dump_url (const char *url, const struct http_parser_url *u)
 {
   unsigned int i;
 
-  printf("\tfield_set: 0x%x, port: %u\n", u->field_set, u->port);
+  char buf[200];
+  snprintf(buf, sizeof(buf), "\tfield_set: 0x%x, port: %u\n", u->field_set, u->port);
+  TEST_MESSAGE(buf);
+
   for (i = 0; i < UF_MAX; i++) {
     if ((u->field_set & (1 << i)) == 0) {
-      printf("\tfield_data[%u]: unset\n", i);
+      snprintf(buf, sizeof(buf), "\tfield_data[%u]: unset\n", i);
+      TEST_MESSAGE(buf);
       continue;
     }
 
-    printf("\tfield_data[%u]: off: %u len: %u part: \"%.*s\n\"",
+    snprintf(buf, sizeof(buf),"\tfield_data[%u]: off: %u len: %u part: \"%.*s\n\"",
            i,
            u->field_data[i].off,
            u->field_data[i].len,
            u->field_data[i].len,
            url + u->field_data[i].off);
+    TEST_MESSAGE(buf);
   }
 }
 
@@ -3454,28 +3467,32 @@ test_parse_url (void)
 
     if (test->rv == 0) {
       if (rv != 0) {
-        printf("\n*** http_parser_parse_url(\"%s\") \"%s\" test failed, "
-               "unexpected rv %d ***\n\n", test->url, test->name, rv);
-        abort();
+        char buf[200];
+        snprintf(buf, sizeof(buf), "http_parser_parse_url(\"%s\") \"%s\" test failed, "
+               "unexpected rv %d", test->url, test->name, rv);
+        TEST_FAIL_MESSAGE(buf);
       }
 
       if (memcmp(&u, &test->u, sizeof(u)) != 0) {
-        printf("\n*** http_parser_parse_url(\"%s\") \"%s\" failed ***\n",
+        char buf[200];
+        snprintf(buf, sizeof(buf), "http_parser_parse_url(\"%s\") \"%s\" failed",
                test->url, test->name);
+        TEST_MESSAGE(buf);
 
-        printf("target http_parser_url:\n");
+        TEST_MESSAGE("target http_parser_url:");
         dump_url(test->url, &test->u);
-        printf("result http_parser_url:\n");
+        TEST_MESSAGE("result http_parser_url:");
         dump_url(test->url, &u);
 
-        abort();
+        TEST_FAIL();
       }
     } else {
       /* test->rv != 0 */
       if (rv == 0) {
-        printf("\n*** http_parser_parse_url(\"%s\") \"%s\" test failed, "
-               "unexpected rv %d ***\n\n", test->url, test->name, rv);
-        abort();
+        char buf[200];
+        snprintf(buf, sizeof(buf), "http_parser_parse_url(\"%s\") \"%s\" test failed, "
+               "unexpected rv %d", test->url, test->name, rv);
+        TEST_FAIL_MESSAGE(buf);
       }
     }
   }
@@ -3518,7 +3535,7 @@ test_message (const struct message *message)
       if (!messages[0].headers_complete_cb_called && parser.nread != read) {
         assert(parser.nread == read);
         print_error(msg1, read);
-        abort();
+        TEST_FAIL();
       }
 
       if (message->upgrade && parser.upgrade && num_messages > 0) {
@@ -3528,7 +3545,7 @@ test_message (const struct message *message)
 
       if (read != msg1len) {
         print_error(msg1, read);
-        abort();
+        TEST_FAIL();
       }
     }
 
@@ -3542,24 +3559,25 @@ test_message (const struct message *message)
 
     if (read != msg2len) {
       print_error(msg2, read);
-      abort();
+      TEST_FAIL();
     }
 
     read = parse(NULL, 0);
 
     if (read != 0) {
       print_error(message->raw, read);
-      abort();
+      TEST_FAIL();
     }
 
   test:
 
     if (num_messages != 1) {
-      printf("\n*** num_messages != 1 after testing '%s' ***\n\n", message->name);
-      abort();
+      char fail_msg_buf[256];
+      snprintf(fail_msg_buf, sizeof(fail_msg_buf), "num_messages != 1 after testing '%s'", message->name);
+      TEST_FAIL_MESSAGE(fail_msg_buf);
     }
 
-    if(!message_eq(0, 0, message)) abort();
+    if(!message_eq(0, 0, message)) TEST_FAIL();;
   }
 }
 
@@ -3578,7 +3596,7 @@ test_message_count_body (const struct message *message)
     read = parse_count_body(message->raw + i, toread);
     if (read != toread) {
       print_error(message->raw, read);
-      abort();
+      TEST_FAIL();
     }
   }
 
@@ -3586,16 +3604,18 @@ test_message_count_body (const struct message *message)
   read = parse_count_body(NULL, 0);
   if (read != 0) {
     print_error(message->raw, read);
-    abort();
+    TEST_FAIL();
   }
 
   if (num_messages != 1) {
-    printf("\n*** num_messages != 1 after testing '%s' ***\n\n", message->name);
-    abort();
+    char fail_msg_buf[256];
+    snprintf(fail_msg_buf, sizeof(fail_msg_buf), "num_messages != 1 after testing '%s'", message->name);
+    TEST_FAIL_MESSAGE(fail_msg_buf);
   }
 
-  if(!message_eq(0, 0, message)) abort();
+  if(!message_eq(0, 0, message)) TEST_FAIL();
 }
+
 
 void
 test_simple_type (const char *buf,
@@ -3618,16 +3638,57 @@ test_simple_type (const char *buf,
 #else
   if (err_expected != err) {
 #endif
-    fprintf(stderr, "\n*** test_simple expected %s, but saw %s ***\n\n%s\n",
+    char fail_msg_buf[256];
+    snprintf(fail_msg_buf, sizeof(fail_msg_buf), "test_simple expected %s, but saw %s\n%s",
         http_errno_name(err_expected), http_errno_name(err), buf);
-    abort();
+    TEST_FAIL_MESSAGE(fail_msg_buf);
   }
 }
 
-void
-test_simple (const char *buf, enum http_errno err_expected)
-{
-  test_simple_type(buf, err_expected, HTTP_REQUEST);
+
+void test_simple_type_content_length_empty(void) {
+  test_simple_type(
+      "POST / HTTP/1.1\r\n"
+      "Content-Length:\r\n"  // empty
+      "\r\n",
+      HPE_INVALID_CONTENT_LENGTH,
+      HTTP_REQUEST);
+}
+
+void test_simple_type_content_length_whitespace(void) {
+  test_simple_type(
+      "POST / HTTP/1.1\r\n"
+      "Content-Length:  42 \r\n"  // Note the surrounding whitespace.
+      "\r\n",
+      HPE_OK,
+      HTTP_REQUEST);
+}
+
+void test_simple_type_content_length_space_in_value(void) {
+  test_simple_type(
+      "POST / HTTP/1.1\r\n"
+      "Content-Length: 4 2\r\n"
+      "\r\n",
+      HPE_INVALID_CONTENT_LENGTH,
+      HTTP_REQUEST);
+}
+
+void test_simple_type_content_length_space_in_value_2(void) {
+  test_simple_type(
+      "POST / HTTP/1.1\r\n"
+      "Content-Length: 13 37\r\n"
+      "\r\n",
+      HPE_INVALID_CONTENT_LENGTH,
+      HTTP_REQUEST);
+}
+
+void test_simple_type_content_length_crlf_after(void) {
+  test_simple_type(
+      "POST / HTTP/1.1\r\n"
+      "Content-Length:  42\r\n"
+      " \r\n",
+      HPE_OK,
+      HTTP_REQUEST);
 }
 
 void
@@ -3652,16 +3713,22 @@ test_invalid_header_content (int req, const char* str)
     return;
   }
 
-  fprintf(stderr,
-          "\n*** Error expected but none in invalid header content test ***\n");
-  abort();
+  TEST_FAIL_MESSAGE("Error expected but none in invalid header content test");
 }
+
 
 void
 test_invalid_header_field_content_error (int req)
 {
   test_invalid_header_content(req, "Foo: F\01ailure");
   test_invalid_header_content(req, "Foo: B\02ar");
+}
+
+
+void
+test_simple (const char *buf, enum http_errno err_expected)
+{
+  test_simple_type(buf, err_expected, HTTP_REQUEST);
 }
 
 void
@@ -3686,10 +3753,10 @@ test_invalid_header_field (int req, const char* str)
     return;
   }
 
-  fprintf(stderr,
-          "\n*** Error expected but none in invalid header token test ***\n");
-  abort();
+  TEST_FAIL_MESSAGE("Error expected but none in invalid header token test");
 }
+
+
 
 void
 test_invalid_header_field_token_error (int req)
@@ -3720,9 +3787,27 @@ test_double_content_length_error (int req)
     return;
   }
 
-  fprintf(stderr,
-          "\n*** Error expected but none in double content-length test ***\n");
-  abort();
+  TEST_FAIL_MESSAGE("Error expected but none in double content-length test");
+}
+
+void test_invalid_header_field_content_error_request(void) {
+  test_invalid_header_field_content_error(HTTP_REQUEST);
+}
+
+void test_invalid_header_field_content_error_response(void) {
+  test_invalid_header_field_content_error(HTTP_RESPONSE);
+}
+
+void test_invalid_header_field_token_error_request(void) {
+  test_invalid_header_field_token_error(HTTP_REQUEST);
+}
+
+void test_invalid_header_field_token_error_response(void) {
+  test_invalid_header_field_token_error(HTTP_RESPONSE);
+}
+
+void test_double_content_length_error_request(void) {
+  test_double_content_length_error(HTTP_REQUEST);
 }
 
 void
@@ -3747,10 +3832,21 @@ test_chunked_content_length_error (int req)
     return;
   }
 
-  fprintf(stderr,
-          "\n*** Error expected but none in chunked content-length test ***\n");
-  abort();
+  TEST_FAIL_MESSAGE("Error expected but none in chunked content-length test");
 }
+
+void test_double_content_length_error_response(void) {
+  test_double_content_length_error(HTTP_RESPONSE);
+}
+
+void test_chunked_content_length_error_request(void) {
+  test_chunked_content_length_error(HTTP_REQUEST);
+}
+
+void test_chunked_content_length_error_response(void) {
+  test_chunked_content_length_error(HTTP_RESPONSE);
+}
+
 
 void
 test_header_cr_no_lf_error (int req)
@@ -3774,9 +3870,15 @@ test_header_cr_no_lf_error (int req)
     return;
   }
 
-  fprintf(stderr,
-          "\n*** Error expected but none in header whitespace test ***\n");
-  abort();
+  TEST_FAIL_MESSAGE("Error expected but none in header whitespace test");
+}
+
+void test_header_cr_no_lf_error_request(void) {
+  test_header_cr_no_lf_error(HTTP_REQUEST);
+}
+
+void test_header_cr_no_lf_error_response(void) {
+  test_header_cr_no_lf_error(HTTP_RESPONSE);
 }
 
 void
@@ -3789,17 +3891,15 @@ test_no_overflow_parse_url (void)
   rv = http_parser_parse_url("http://example.com:8001", 22, 0, &u);
 
   if (rv != 0) {
-    fprintf(stderr,
-            "\n*** test_no_overflow_parse_url invalid return value=%d\n",
-            rv);
-    abort();
+    char fail_msg_buf[256];
+    snprintf(fail_msg_buf, sizeof(fail_msg_buf), "test_no_overflow_parse_url invalid return value=%d", rv);
+    TEST_FAIL_MESSAGE(fail_msg_buf);
   }
 
   if (u.port != 800) {
-    fprintf(stderr,
-            "\n*** test_no_overflow_parse_url invalid port number=%d\n",
-            u.port);
-    abort();
+    char fail_msg_buf[256];
+    snprintf(fail_msg_buf, sizeof(fail_msg_buf), "test_no_overflow_parse_url invalid port number=%d", u.port);
+    TEST_FAIL_MESSAGE(fail_msg_buf);
   }
 }
 
@@ -3827,13 +3927,70 @@ test_header_overflow_error (int req)
     }
   }
 
-  fprintf(stderr, "\n*** Error expected but none in header overflow test ***\n");
-  abort();
+  TEST_FAIL_MESSAGE("Error expected but none in header overflow test");
+}
+void test_header_overflow_error_request(void) {
+  test_header_overflow_error(HTTP_REQUEST);
+}
+
+void test_header_overflow_error_response(void) {
+  test_header_overflow_error(HTTP_RESPONSE);
 }
 
 
 void
-test_header_nread_value ()
+test_no_overflow_long_body (int req, size_t length)
+{
+  http_parser parser;
+  http_parser_init(&parser, req ? HTTP_REQUEST : HTTP_RESPONSE);
+  size_t parsed;
+  size_t i;
+  char buf1[3000];
+  size_t buf1len = sprintf(buf1, "%s\r\nConnection: Keep-Alive\r\nContent-Length: %lu\r\n\r\n",
+      req ? "POST / HTTP/1.0" : "HTTP/1.0 200 OK", (unsigned long)length);
+  parsed = http_parser_execute(&parser, &settings_null, buf1, buf1len);
+  if (parsed != buf1len)
+    goto err;
+
+  for (i = 0; i < length; i++) {
+    char foo = 'a';
+    parsed = http_parser_execute(&parser, &settings_null, &foo, 1);
+    if (parsed != 1)
+      goto err;
+  }
+
+  parsed = http_parser_execute(&parser, &settings_null, buf1, buf1len);
+  if (parsed != buf1len) goto err;
+  return;
+
+ err:
+  {
+    char fail_msg_buf[256];
+    snprintf(fail_msg_buf, sizeof(fail_msg_buf), "error in test_no_overflow_long_body %s of length %lu",
+            req ? "REQUEST" : "RESPONSE",
+            (unsigned long)length);
+    TEST_FAIL_MESSAGE(fail_msg_buf);
+  }
+}
+
+
+void test_no_overflow_long_body_request_1000(void) {
+  test_no_overflow_long_body(HTTP_REQUEST, 1000);
+}
+
+void test_no_overflow_long_body_request_100000(void) {
+  test_no_overflow_long_body(HTTP_REQUEST, 100000);
+}
+
+void test_no_overflow_long_body_response_1000(void) {
+  test_no_overflow_long_body(HTTP_RESPONSE, 1000);
+}
+
+void test_no_overflow_long_body_response_100000(void) {
+  test_no_overflow_long_body(HTTP_RESPONSE, 100000);
+}
+
+void test_header_nread_value(void)
 {
   http_parser parser;
   http_parser_init(&parser, HTTP_REQUEST);
@@ -3841,9 +3998,9 @@ test_header_nread_value ()
   const char *buf;
   buf = "GET / HTTP/1.1\r\nheader: value\nhdr: value\r\n";
   parsed = http_parser_execute(&parser, &settings_null, buf, strlen(buf));
-  assert(parsed == strlen(buf));
+  TEST_ASSERT_EQUAL_UINT(strlen(buf), parsed);
 
-  assert(parser.nread == strlen(buf));
+  TEST_ASSERT_EQUAL_UINT(strlen(buf), parser.nread);
 }
 
 
@@ -3895,39 +4052,6 @@ test_chunk_content_length_overflow_error (void)
 }
 
 void
-test_no_overflow_long_body (int req, size_t length)
-{
-  http_parser parser;
-  http_parser_init(&parser, req ? HTTP_REQUEST : HTTP_RESPONSE);
-  size_t parsed;
-  size_t i;
-  char buf1[3000];
-  size_t buf1len = sprintf(buf1, "%s\r\nConnection: Keep-Alive\r\nContent-Length: %lu\r\n\r\n",
-      req ? "POST / HTTP/1.0" : "HTTP/1.0 200 OK", (unsigned long)length);
-  parsed = http_parser_execute(&parser, &settings_null, buf1, buf1len);
-  if (parsed != buf1len)
-    goto err;
-
-  for (i = 0; i < length; i++) {
-    char foo = 'a';
-    parsed = http_parser_execute(&parser, &settings_null, &foo, 1);
-    if (parsed != 1)
-      goto err;
-  }
-
-  parsed = http_parser_execute(&parser, &settings_null, buf1, buf1len);
-  if (parsed != buf1len) goto err;
-  return;
-
- err:
-  fprintf(stderr,
-          "\n*** error in test_no_overflow_long_body %s of length %lu ***\n",
-          req ? "REQUEST" : "RESPONSE",
-          (unsigned long)length);
-  abort();
-}
-
-void
 test_multiple3 (const struct message *r1, const struct message *r2, const struct message *r3)
 {
   int message_count = count_parsed_messages(3, r1, r2, r3);
@@ -3956,26 +4080,27 @@ test_multiple3 (const struct message *r1, const struct message *r2, const struct
 
   if (read != strlen(total)) {
     print_error(total, read);
-    abort();
+    TEST_FAIL();
   }
 
   read = parse(NULL, 0);
 
   if (read != 0) {
     print_error(total, read);
-    abort();
+    TEST_FAIL();
   }
 
 test:
 
   if (message_count != num_messages) {
-    fprintf(stderr, "\n\n*** Parser didn't see 3 messages only %d *** \n", num_messages);
-    abort();
+    char fail_msg_buf[256];
+    snprintf(fail_msg_buf, sizeof(fail_msg_buf), "Parser didn't see 3 messages only %d", num_messages);
+    TEST_FAIL_MESSAGE(fail_msg_buf);
   }
 
-  if (!message_eq(0, 0, r1)) abort();
-  if (message_count > 1 && !message_eq(1, 0, r2)) abort();
-  if (message_count > 2 && !message_eq(2, 0, r3)) abort();
+  if (!message_eq(0, 0, r1)) TEST_FAIL();
+  if (message_count > 1 && !message_eq(1, 0, r2)) TEST_FAIL();
+  if (message_count > 2 && !message_eq(2, 0, r3)) TEST_FAIL();
 }
 
 /* SCAN through every possible breaking to make sure the
@@ -4072,23 +4197,31 @@ test:
         }
 
         if (message_count != num_messages) {
-          fprintf(stderr, "\n\nParser didn't see %d messages only %d\n",
+          char buf[200];
+          snprintf(buf, sizeof(buf), "\n\nParser didn't see %d messages only %d\n",
             message_count, num_messages);
+          TEST_MESSAGE(buf);
           goto error;
         }
 
         if (!message_eq(0, 0, r1)) {
-          fprintf(stderr, "\n\nError matching messages[0] in test_scan.\n");
+          char buf[200];
+          snprintf(buf, sizeof(buf), "Error matching messages[0] in test_scan.");
+          TEST_MESSAGE(buf);
           goto error;
         }
 
         if (message_count > 1 && !message_eq(1, 0, r2)) {
-          fprintf(stderr, "\n\nError matching messages[1] in test_scan.\n");
+          char buf[200];
+          snprintf(buf, sizeof(buf), "Error matching messages[1] in test_scan.");
+          TEST_MESSAGE(buf);
           goto error;
         }
 
         if (message_count > 2 && !message_eq(2, 0, r3)) {
-          fprintf(stderr, "\n\nError matching messages[2] in test_scan.\n");
+          char buf[200];
+          snprintf(buf, sizeof(buf), "Error matching messages[2] in test_scan.");
+          TEST_MESSAGE(buf);
           goto error;
         }
       }
@@ -4098,11 +4231,18 @@ test:
   return;
 
  error:
-  fprintf(stderr, "i=%d  j=%d\n", i, j);
-  fprintf(stderr, "buf1 (%u) %s\n\n", (unsigned int)buf1_len, buf1);
-  fprintf(stderr, "buf2 (%u) %s\n\n", (unsigned int)buf2_len , buf2);
-  fprintf(stderr, "buf3 (%u) %s\n", (unsigned int)buf3_len, buf3);
-  abort();
+ {
+ char buf[81*1024];
+  snprintf(buf, sizeof(buf), "i=%d  j=%d\n", i, j);
+  TEST_MESSAGE(buf);
+  snprintf(buf, sizeof(buf), "buf1 (%u) %s\n\n", (unsigned int)buf1_len, buf1);
+  TEST_MESSAGE(buf);
+  snprintf(buf, sizeof(buf), "buf2 (%u) %s\n\n", (unsigned int)buf2_len , buf2);
+  TEST_MESSAGE(buf);
+  snprintf(buf, sizeof(buf), "buf3 (%u) %s\n", (unsigned int)buf3_len, buf3);
+  TEST_MESSAGE(buf);
+  TEST_FAIL();
+ }
 }
 
 // user required to free the result
@@ -4115,6 +4255,7 @@ create_large_chunked_message (int body_size_in_kb, const char* headers)
   size_t headers_len = strlen(headers);
   size_t bufsize = headers_len + (5+1024+2)*body_size_in_kb + 6;
   char * buf = malloc(bufsize);
+  assert(buf);
 
   memcpy(buf, headers, headers_len);
   wrote += headers_len;
@@ -4166,7 +4307,7 @@ test_message_pause (const struct message *msg)
         return;
       }
 
-      assert (HTTP_PARSER_ERRNO(&parser) == HPE_PAUSED);
+      TEST_ASSERT_EQUAL(HPE_PAUSED, HTTP_PARSER_ERRNO(&parser));
     }
 
     buf += nread;
@@ -4175,15 +4316,16 @@ test_message_pause (const struct message *msg)
   } while (buflen > 0);
 
   nread = parse_pause(NULL, 0);
-  assert (nread == 0);
+  TEST_ASSERT_EQUAL(0, nread);
 
 test:
   if (num_messages != 1) {
-    printf("\n*** num_messages != 1 after testing '%s' ***\n\n", msg->name);
-    abort();
+    char fail_msg_buf[256];
+    snprintf(fail_msg_buf, sizeof(fail_msg_buf), "num_messages != 1 after testing '%s'", msg->name);
+    TEST_FAIL_MESSAGE(fail_msg_buf);
   }
 
-  if(!message_eq(0, 0, msg)) abort();
+  if(!message_eq(0, 0, msg)) TEST_FAIL();
 }
 
 /* Verify that body and next message won't be parsed in responses to CONNECT */
@@ -4198,328 +4340,258 @@ test_message_connect (const struct message *msg)
   parse_connect(buf, buflen);
 
   if (num_messages != 1) {
-    printf("\n*** num_messages != 1 after testing '%s' ***\n\n", msg->name);
-    abort();
+    char fail_msg_buf[256];
+    snprintf(fail_msg_buf, sizeof(fail_msg_buf), "num_messages != 1 after testing '%s'", msg->name);
+    TEST_FAIL_MESSAGE(fail_msg_buf);
   }
 
-  if(!message_eq(0, 1, msg)) abort();
+  if(!message_eq(0, 1, msg)) TEST_FAIL();
 }
 
-int
-main (void)
-{
-  unsigned i, j, k;
-  unsigned long version;
-  unsigned major;
-  unsigned minor;
-  unsigned patch;
 
-  version = http_parser_version();
-  major = (version >> 16) & 255;
-  minor = (version >> 8) & 255;
-  patch = version & 255;
-  printf("http_parser v%u.%u.%u (0x%06lx)\n", major, minor, patch, version);
+// RESPONSES
+void test_simple_type_invalid_http_version_htp(void) {
+  test_simple_type("HTP/1.1 200 OK\r\n\r\n", HPE_INVALID_VERSION, HTTP_RESPONSE);
+}
 
-  printf("sizeof(http_parser) = %u\n", (unsigned int)sizeof(http_parser));
-  // assert(sizeof(http_parser) == 4 + 4 + 8 + 2 + 2 + 4 + sizeof(void *));
+void test_simple_type_invalid_http_version_01_1(void) {
+  test_simple_type("HTTP/01.1 200 OK\r\n\r\n", HPE_INVALID_VERSION, HTTP_RESPONSE);
+}
 
-  //// API
-  test_preserve_data();
-  test_parse_url();
-  test_method_str();
-  test_status_str();
+void test_simple_type_invalid_http_version_11_1(void) {
+  test_simple_type("HTTP/11.1 200 OK\r\n\r\n", HPE_INVALID_VERSION, HTTP_RESPONSE);
+}
 
-  //// NREAD
-  test_header_nread_value();
+void test_simple_type_invalid_http_version_1_01(void) {
+  test_simple_type("HTTP/1.01 200 OK\r\n\r\n", HPE_INVALID_VERSION, HTTP_RESPONSE);
+}
 
-  //// OVERFLOW CONDITIONS
-  test_no_overflow_parse_url();
+void test_simple_type_invalid_http_version_tab(void) {
+  test_simple_type("HTTP/1.1\t200 OK\r\n\r\n", HPE_INVALID_VERSION, HTTP_RESPONSE);
+}
 
-  test_header_overflow_error(HTTP_REQUEST);
-  test_no_overflow_long_body(HTTP_REQUEST, 1000);
-  test_no_overflow_long_body(HTTP_REQUEST, 100000);
+void test_simple_type_invalid_http_version_leading_cr(void) {
+  test_simple_type("\rHTTP/1.1\t200 OK\r\n\r\n", HPE_INVALID_VERSION, HTTP_RESPONSE);
+}
 
-  test_header_overflow_error(HTTP_RESPONSE);
-  test_no_overflow_long_body(HTTP_RESPONSE, 1000);
-  test_no_overflow_long_body(HTTP_RESPONSE, 100000);
 
-  test_header_content_length_overflow_error();
-  test_chunk_content_length_overflow_error();
+void test_multiple3_responses(void) {
+  unsigned int i, j, k;
+  for (i = 0; i < ARRAY_SIZE(responses); i++) {
+    if (!responses[i].should_keep_alive) continue;
+    for (j = 0; j < ARRAY_SIZE(responses); j++) {
+      if (!responses[j].should_keep_alive) continue;
+      for (k = 0; k < ARRAY_SIZE(responses); k++) {
+        parser_init(responses[i].type); // Initialize for the first message type
+        test_multiple3(&responses[i], &responses[j], &responses[k]);
+      }
+    }
+  }
+}
 
-  //// HEADER FIELD CONDITIONS
-  test_double_content_length_error(HTTP_REQUEST);
-  test_chunked_content_length_error(HTTP_REQUEST);
-  test_header_cr_no_lf_error(HTTP_REQUEST);
-  test_invalid_header_field_token_error(HTTP_REQUEST);
-  test_invalid_header_field_content_error(HTTP_REQUEST);
-  test_double_content_length_error(HTTP_RESPONSE);
-  test_chunked_content_length_error(HTTP_RESPONSE);
-  test_header_cr_no_lf_error(HTTP_RESPONSE);
-  test_invalid_header_field_token_error(HTTP_RESPONSE);
-  test_invalid_header_field_content_error(HTTP_RESPONSE);
+void test_message_count_body_no_headers_no_body_404(void) {
+  parser_init(responses[NO_HEADERS_NO_BODY_404].type);
+  test_message_count_body(&responses[NO_HEADERS_NO_BODY_404]);
+}
 
-  test_simple_type(
-      "POST / HTTP/1.1\r\n"
-      "Content-Length:\r\n"  // empty
-      "\r\n",
-      HPE_INVALID_CONTENT_LENGTH,
-      HTTP_REQUEST);
+void test_message_count_body_trailing_space_on_chunked_body(void) {
+  parser_init(responses[TRAILING_SPACE_ON_CHUNKED_BODY].type);
+  test_message_count_body(&responses[TRAILING_SPACE_ON_CHUNKED_BODY]);
+}
 
-  test_simple_type(
-      "POST / HTTP/1.1\r\n"
-      "Content-Length:  42 \r\n"  // Note the surrounding whitespace.
-      "\r\n",
-      HPE_OK,
-      HTTP_REQUEST);
 
-  test_simple_type(
-      "POST / HTTP/1.1\r\n"
-      "Content-Length: 4 2\r\n"
-      "\r\n",
-      HPE_INVALID_CONTENT_LENGTH,
-      HTTP_REQUEST);
-
-  test_simple_type(
-      "POST / HTTP/1.1\r\n"
-      "Content-Length: 13 37\r\n"
-      "\r\n",
-      HPE_INVALID_CONTENT_LENGTH,
-      HTTP_REQUEST);
-
+void test_simple_type_content_length_body_after(void) {
   test_simple_type(
       "POST / HTTP/1.1\r\n"
       "Content-Length:  42\r\n"
       " Hello world!\r\n",
       HPE_INVALID_CONTENT_LENGTH,
       HTTP_REQUEST);
+}
 
-  test_simple_type(
-      "POST / HTTP/1.1\r\n"
-      "Content-Length:  42\r\n"
-      " \r\n",
-      HPE_OK,
-      HTTP_REQUEST);
-
-  //// RESPONSES
-
-  test_simple_type("HTP/1.1 200 OK\r\n\r\n", HPE_INVALID_VERSION, HTTP_RESPONSE);
-  test_simple_type("HTTP/01.1 200 OK\r\n\r\n", HPE_INVALID_VERSION, HTTP_RESPONSE);
-  test_simple_type("HTTP/11.1 200 OK\r\n\r\n", HPE_INVALID_VERSION, HTTP_RESPONSE);
-  test_simple_type("HTTP/1.01 200 OK\r\n\r\n", HPE_INVALID_VERSION, HTTP_RESPONSE);
-  test_simple_type("HTTP/1.1\t200 OK\r\n\r\n", HPE_INVALID_VERSION, HTTP_RESPONSE);
-  test_simple_type("\rHTTP/1.1\t200 OK\r\n\r\n", HPE_INVALID_VERSION, HTTP_RESPONSE);
-
+void test_all_responses_message(void) {
+  unsigned int i;
   for (i = 0; i < ARRAY_SIZE(responses); i++) {
+    parser_init(responses[i].type);
     test_message(&responses[i]);
   }
+}
 
+void test_all_responses_message_pause(void) {
+  unsigned int i;
   for (i = 0; i < ARRAY_SIZE(responses); i++) {
+    parser_init(responses[i].type);
     test_message_pause(&responses[i]);
   }
+}
 
+void test_all_responses_message_connect(void) {
+  unsigned int i;
   for (i = 0; i < ARRAY_SIZE(responses); i++) {
+    parser_init(responses[i].type);
     test_message_connect(&responses[i]);
   }
+}
 
-  for (i = 0; i < ARRAY_SIZE(responses); i++) {
-    if (!responses[i].should_keep_alive) continue;
-    for (j = 0; j < ARRAY_SIZE(responses); j++) {
-      if (!responses[j].should_keep_alive) continue;
-      for (k = 0; k < ARRAY_SIZE(responses); k++) {
-        test_multiple3(&responses[i], &responses[j], &responses[k]);
+#define LARGE_CHUNKED_CHUNKS 16
+
+void test_message_count_body_large_chunked(void) {
+  char * msg = create_large_chunked_message(LARGE_CHUNKED_CHUNKS,
+    "HTTP/1.0 200 OK\r\n"
+    "Transfer-Encoding: chunked\r\n"
+    "Content-Type: text/plain\r\n"
+    "\r\n");
+  static struct message large_chunked =
+    {.name= "large chunked"
+    ,.type= HTTP_RESPONSE
+    ,.raw= NULL
+    ,.should_keep_alive= FALSE
+    ,.message_complete_on_eof= FALSE
+    ,.http_major= 1
+    ,.http_minor= 0
+    ,.status_code= 200
+    ,.response_status= "OK"
+    ,.num_headers= 2
+    ,.headers=
+      { { "Transfer-Encoding", "chunked" }
+      , { "Content-Type", "text/plain" }
       }
-    }
+    ,.body_size = LARGE_CHUNKED_CHUNKS * 1024
+    ,.num_chunks_complete = LARGE_CHUNKED_CHUNKS + 1
+    };
+
+  large_chunked.raw = msg;
+
+  unsigned int i;
+  for (i = 0; i < MAX_CHUNKS; i++) {
+    large_chunked.chunk_lengths[i] = 1024;
   }
+  parser_init(large_chunked.type);
+  test_message_count_body(&large_chunked);
+  free(msg);
+  large_chunked.raw = NULL;
+}
 
-  test_message_count_body(&responses[NO_HEADERS_NO_BODY_404]);
-  test_message_count_body(&responses[TRAILING_SPACE_ON_CHUNKED_BODY]);
-
-  // test very large chunked response
-  {
-    char * msg = create_large_chunked_message(31337,
-      "HTTP/1.0 200 OK\r\n"
-      "Transfer-Encoding: chunked\r\n"
-      "Content-Type: text/plain\r\n"
-      "\r\n");
-    struct message large_chunked =
-      {.name= "large chunked"
-      ,.type= HTTP_RESPONSE
-      ,.raw= msg
-      ,.should_keep_alive= FALSE
-      ,.message_complete_on_eof= FALSE
-      ,.http_major= 1
-      ,.http_minor= 0
-      ,.status_code= 200
-      ,.response_status= "OK"
-      ,.num_headers= 2
-      ,.headers=
-        { { "Transfer-Encoding", "chunked" }
-        , { "Content-Type", "text/plain" }
-        }
-      ,.body_size= 31337*1024
-      ,.num_chunks_complete= 31338
-      };
-    for (i = 0; i < MAX_CHUNKS; i++) {
-      large_chunked.chunk_lengths[i] = 1024;
-    }
-    test_message_count_body(&large_chunked);
-    free(msg);
-  }
-
-
-
-  printf("response scan 1/2      ");
+void test_response_scan_1_2(void) {
   test_scan( &responses[TRAILING_SPACE_ON_CHUNKED_BODY]
            , &responses[NO_BODY_HTTP10_KA_204]
            , &responses[NO_REASON_PHRASE]
            );
+}
 
-  printf("response scan 2/2      ");
+void test_response_scan_2_2(void) {
   test_scan( &responses[BONJOUR_MADAME_FR]
            , &responses[UNDERSTORE_HEADER_KEY]
            , &responses[NO_CARRIAGE_RET]
            );
+}
 
-  puts("responses okay");
-
-
-  /// REQUESTS
-
+// REQUESTS
+void test_simple_get_ihttp_1_0(void) {
   test_simple("GET / IHTTP/1.0\r\n\r\n", HPE_INVALID_CONSTANT);
+}
+
+void test_simple_get_ice_1_0(void) {
   test_simple("GET / ICE/1.0\r\n\r\n", HPE_INVALID_CONSTANT);
+}
+
+void test_simple_get_htp_1_1(void) {
   test_simple("GET / HTP/1.1\r\n\r\n", HPE_INVALID_VERSION);
+}
+
+void test_simple_get_http_01_1(void) {
   test_simple("GET / HTTP/01.1\r\n\r\n", HPE_INVALID_VERSION);
+}
+
+void test_simple_get_http_11_1(void) {
   test_simple("GET / HTTP/11.1\r\n\r\n", HPE_INVALID_VERSION);
+}
+
+void test_simple_get_http_1_01(void) {
   test_simple("GET / HTTP/1.01\r\n\r\n", HPE_INVALID_VERSION);
+}
 
+void test_simple_get_http_1_0_invalid_header_token_1(void) {
   test_simple("GET / HTTP/1.0\r\nHello: w\1rld\r\n\r\n", HPE_INVALID_HEADER_TOKEN);
-  test_simple("GET / HTTP/1.0\r\nHello: woooo\2rld\r\n\r\n", HPE_INVALID_HEADER_TOKEN);
+}
 
-  // Extended characters - see nodejs/test/parallel/test-http-headers-obstext.js
+void test_simple_get_http_1_0_invalid_header_token_2(void) {
+  test_simple("GET / HTTP/1.0\r\nHello: woooo\2rld\r\n\r\n", HPE_INVALID_HEADER_TOKEN);
+}
+
+void test_simple_extended_characters_in_header(void) {
   test_simple("GET / HTTP/1.1\r\n"
               "Test: Düsseldorf\r\n",
               HPE_OK);
+}
 
-  // Well-formed but incomplete
+void test_simple_well_formed_but_incomplete(void) {
   test_simple("GET / HTTP/1.1\r\n"
               "Content-Type: text/plain\r\n"
               "Content-Length: 6\r\n"
               "\r\n"
               "fooba",
               HPE_OK);
+}
 
-  // Unknown Transfer-Encoding in request
+void test_simple_unknown_transfer_encoding_in_request(void) {
   test_simple("GET / HTTP/1.1\r\n"
               "Transfer-Encoding: unknown\r\n"
               "\r\n",
               HPE_INVALID_TRANSFER_ENCODING);
+}
 
+void test_all_methods(void) {
   static const char *all_methods[] = {
-    "DELETE",
-    "GET",
-    "HEAD",
-    "POST",
-    "PUT",
-    //"CONNECT", //CONNECT can't be tested like other methods, it's a tunnel
-    "OPTIONS",
-    "TRACE",
-    "COPY",
-    "LOCK",
-    "MKCOL",
-    "MOVE",
-    "PROPFIND",
-    "PROPPATCH",
-    "SEARCH",
-    "UNLOCK",
-    "BIND",
-    "REBIND",
-    "UNBIND",
-    "ACL",
-    "REPORT",
-    "MKACTIVITY",
-    "CHECKOUT",
-    "MERGE",
-    "M-SEARCH",
-    "NOTIFY",
-    "SUBSCRIBE",
-    "UNSUBSCRIBE",
-    "PATCH",
-    "PURGE",
-    "MKCALENDAR",
-    "LINK",
-    "UNLINK",
-    0 };
+    "DELETE", "GET", "HEAD", "POST", "PUT", "OPTIONS", "TRACE", "COPY", "LOCK",
+    "MKCOL", "MOVE", "PROPFIND", "PROPPATCH", "SEARCH", "UNLOCK", "BIND",
+    "REBIND", "UNBIND", "ACL", "REPORT", "MKACTIVITY", "CHECKOUT", "MERGE",
+    "M-SEARCH", "NOTIFY", "SUBSCRIBE", "UNSUBSCRIBE", "PATCH", "PURGE",
+    "MKCALENDAR", "LINK", "UNLINK", 0
+  };
   const char **this_method;
   for (this_method = all_methods; *this_method; this_method++) {
     char buf[200];
     sprintf(buf, "%s / HTTP/1.1\r\n\r\n", *this_method);
     test_simple(buf, HPE_OK);
   }
+}
 
+void test_bad_methods(void) {
   static const char *bad_methods[] = {
-      "ASDF",
-      "C******",
-      "COLA",
-      "GEM",
-      "GETA",
-      "M****",
-      "MKCOLA",
-      "PROPPATCHA",
-      "PUN",
-      "PX",
-      "SA",
-      "hello world",
-      0 };
+      "ASDF", "C******", "COLA", "GEM", "GETA", "M****", "MKCOLA",
+      "PROPPATCHA", "PUN", "PX", "SA", "hello world", 0
+  };
+  const char **this_method;
   for (this_method = bad_methods; *this_method; this_method++) {
     char buf[200];
     sprintf(buf, "%s / HTTP/1.1\r\n\r\n", *this_method);
     test_simple(buf, HPE_INVALID_METHOD);
   }
+}
 
-  // illegal header field name line folding
+void test_simple_illegal_header_field_name_line_folding(void) {
   test_simple("GET / HTTP/1.1\r\n"
               "name\r\n"
               " : value\r\n"
               "\r\n",
               HPE_INVALID_HEADER_TOKEN);
+}
 
+void test_simple_dumbluck2(void) {
   const char *dumbluck2 =
     "GET / HTTP/1.1\r\n"
     "X-SSL-Nonsense:   -----BEGIN CERTIFICATE-----\r\n"
     "\tMIIFbTCCBFWgAwIBAgICH4cwDQYJKoZIhvcNAQEFBQAwcDELMAkGA1UEBhMCVUsx\r\n"
     "\tETAPBgNVBAoTCGVTY2llbmNlMRIwEAYDVQQLEwlBdXRob3JpdHkxCzAJBgNVBAMT\r\n"
     "\tAkNBMS0wKwYJKoZIhvcNAQkBFh5jYS1vcGVyYXRvckBncmlkLXN1cHBvcnQuYWMu\r\n"
-    "\tdWswHhcNMDYwNzI3MTQxMzI4WhcNMDcwNzI3MTQxMzI4WjBbMQswCQYDVQQGEwJV\r\n"
-    "\tSzERMA8GA1UEChMIZVNjaWVuY2UxEzARBgNVBAsTCk1hbmNoZXN0ZXIxCzAJBgNV\r\n"
-    "\tBAcTmrsogriqMWLAk1DMRcwFQYDVQQDEw5taWNoYWVsIHBhcmQYJKoZIhvcNAQEB\r\n"
-    "\tBQADggEPADCCAQoCggEBANPEQBgl1IaKdSS1TbhF3hEXSl72G9J+WC/1R64fAcEF\r\n"
-    "\tW51rEyFYiIeZGx/BVzwXbeBoNUK41OK65sxGuflMo5gLflbwJtHBRIEKAfVVp3YR\r\n"
-    "\tgW7cMA/s/XKgL1GEC7rQw8lIZT8RApukCGqOVHSi/F1SiFlPDxuDfmdiNzL31+sL\r\n"
-    "\t0iwHDdNkGjy5pyBSB8Y79dsSJtCW/iaLB0/n8Sj7HgvvZJ7x0fr+RQjYOUUfrePP\r\n"
-    "\tu2MSpFyf+9BbC/aXgaZuiCvSR+8Snv3xApQY+fULK/xY8h8Ua51iXoQ5jrgu2SqR\r\n"
-    "\twgA7BUi3G8LFzMBl8FRCDYGUDy7M6QaHXx1ZWIPWNKsCAwEAAaOCAiQwggIgMAwG\r\n"
-    "\tA1UdEwEB/wQCMAAwEQYJYIZIAYb4QgHTTPAQDAgWgMA4GA1UdDwEB/wQEAwID6DAs\r\n"
-    "\tBglghkgBhvhCAQ0EHxYdVUsgZS1TY2llbmNlIFVzZXIgQ2VydGlmaWNhdGUwHQYD\r\n"
-    "\tVR0OBBYEFDTt/sf9PeMaZDHkUIldrDYMNTBZMIGaBgNVHSMEgZIwgY+AFAI4qxGj\r\n"
-    "\tloCLDdMVKwiljjDastqooXSkcjBwMQswCQYDVQQGEwJVSzERMA8GA1UEChMIZVNj\r\n"
-    "\taWVuY2UxEjAQBgNVBAsTCUF1dGhvcml0eTELMAkGA1UEAxMCQ0ExLTArBgkqhkiG\r\n"
-    "\t9w0BCQEWHmNhLW9wZXJhdG9yQGdyaWQtc3VwcG9ydC5hYy51a4IBADApBgNVHRIE\r\n"
-    "\tIjAggR5jYS1vcGVyYXRvckBncmlkLXN1cHBvcnQuYWMudWswGQYDVR0gBBIwEDAO\r\n"
-    "\tBgwrBgEEAdkvAQEBAQYwPQYJYIZIAYb4QgEEBDAWLmh0dHA6Ly9jYS5ncmlkLXN1\r\n"
-    "\tcHBvcnQuYWMudmT4sopwqlBWsvcHViL2NybC9jYWNybC5jcmwwPQYJYIZIAYb4QgEDBDAWLmh0\r\n"
-    "\tdHA6Ly9jYS5ncmlkLXN1cHBvcnQuYWMudWsvcHViL2NybC9jYWNybC5jcmwwPwYD\r\n"
-    "\tVR0fBDgwNjA0oDKgMIYuaHR0cDovL2NhLmdyaWQt5hYy51ay9wdWIv\r\n"
-    "\tY3JsL2NhY3JsLmNybDANBgkqhkiG9w0BAQUFAAOCAQEAS/U4iiooBENGW/Hwmmd3\r\n"
-    "\tXCy6Zrt08YjKCzGNjorT98g8uGsqYjSxv/hmi0qlnlHs+k/3Iobc3LjS5AMYr5L8\r\n"
-    "\tUO7OSkgFFlLHQyC9JzPfmLCAugvzEbyv4Olnsr8hbxF1MbKZoQxUZtMVu29wjfXk\r\n"
-    "\thTeApBv7eaKCWpSp7MCbvgzm74izKhu3vlDk9w6qVrxePfGgpKPqfHiOoGhFnbTK\r\n"
-    "\twTC6o2xq5y0qZ03JonF7OJspEd3I5zKY3E+ov7/ZhW6DqT8UFvsAdjvQbXyhV8Eu\r\n"
-    "\tYhixw1aKEPzNjNowuIseVogKOLXxWI5vAi5HgXdS0/ES5gDGsABo4fqovUKlgop3\r\n"
     "\tRA==\r\n"
     "\t-----END CERTIFICATE-----\r\n"
     "\r\n";
   test_simple(dumbluck2, HPE_OK);
+}
 
+void test_simple_corrupted_connection(void) {
   const char *corrupted_connection =
     "GET / HTTP/1.1\r\n"
     "Host: www.example.com\r\n"
@@ -4527,7 +4599,9 @@ main (void)
     "Accept-Encoding: gzip\r\n"
     "\r\n";
   test_simple(corrupted_connection, HPE_INVALID_HEADER_TOKEN);
+}
 
+void test_simple_corrupted_header_name(void) {
   const char *corrupted_header_name =
     "GET / HTTP/1.1\r\n"
     "Host: www.example.com\r\n"
@@ -4535,66 +4609,233 @@ main (void)
     "Accept-Encoding: gzip\r\n"
     "\r\n";
   test_simple(corrupted_header_name, HPE_INVALID_HEADER_TOKEN);
+}
 
-#if 0
-  // NOTE(Wed Nov 18 11:57:27 CET 2009) this seems okay. we just read body
-  // until EOF.
-  //
-  // no content-length
-  // error if there is a body without content length
-  const char *bad_get_no_headers_no_body = "GET /bad_get_no_headers_no_body/world HTTP/1.1\r\n"
-                                           "Accept: */*\r\n"
-                                           "\r\n"
-                                           "HELLO";
-  test_simple(bad_get_no_headers_no_body, 0);
-#endif
-  /* TODO sending junk and large headers gets rejected */
-
-
-  /* check to make sure our predefined requests are okay */
+void test_all_requests_message(void) {
+  unsigned int i;
   for (i = 0; i < ARRAY_SIZE(requests); i++) {
+    parser_init(requests[i].type);
     test_message(&requests[i]);
   }
+}
 
+void test_all_requests_message_pause(void) {
+  unsigned int i;
   for (i = 0; i < ARRAY_SIZE(requests); i++) {
+    parser_init(requests[i].type);
     test_message_pause(&requests[i]);
   }
+}
 
+void test_multiple3_requests(void) {
+  unsigned int i, j, k;
   for (i = 0; i < ARRAY_SIZE(requests); i++) {
     if (!requests[i].should_keep_alive) continue;
     for (j = 0; j < ARRAY_SIZE(requests); j++) {
       if (!requests[j].should_keep_alive) continue;
       for (k = 0; k < ARRAY_SIZE(requests); k++) {
+        parser_init(requests[i].type); // Initialize for the first message type
         test_multiple3(&requests[i], &requests[j], &requests[k]);
       }
     }
   }
+}
 
-  printf("request scan 1/4      ");
+void test_request_scan_1_4(void) {
   test_scan( &requests[GET_NO_HEADERS_NO_BODY]
            , &requests[GET_ONE_HEADER_NO_BODY]
            , &requests[GET_NO_HEADERS_NO_BODY]
            );
+}
 
-  printf("request scan 2/4      ");
+void test_request_scan_2_4(void) {
   test_scan( &requests[POST_CHUNKED_ALL_YOUR_BASE]
            , &requests[POST_IDENTITY_BODY_WORLD]
            , &requests[GET_FUNKY_CONTENT_LENGTH]
            );
+}
 
-  printf("request scan 3/4      ");
+void test_request_scan_3_4(void) {
   test_scan( &requests[TWO_CHUNKS_MULT_ZERO_END]
            , &requests[CHUNKED_W_TRAILING_HEADERS]
            , &requests[CHUNKED_W_NONSENSE_AFTER_LENGTH]
            );
+}
 
-  printf("request scan 4/4      ");
+void test_request_scan_4_4(void) {
   test_scan( &requests[QUERY_URL_WITH_QUESTION_MARK_GET]
            , &requests[PREFIX_NEWLINE_GET ]
            , &requests[CONNECT_REQUEST]
            );
-
-  puts("requests okay");
-
-  return 0;
 }
+
+void test_message_response_all(){
+  for (int i = 0; i < ARRAY_SIZE(responses); i++) {
+    test_message(&responses[i]);
+  }
+}
+
+void test_message_pause_response_all(){
+
+  for (int i = 0; i < ARRAY_SIZE(responses); i++) {
+    test_message_pause(&responses[i]);
+  }
+}
+
+void test_message_connect_response_all(){
+for (int i = 0; i < ARRAY_SIZE(responses); i++) {
+    test_message_connect(&responses[i]);
+  }
+}
+
+void test_simple_all_methods(){
+  static const char *all_methods[] = {
+    "DELETE", "GET", "HEAD", "POST", "PUT", "OPTIONS", "TRACE", "COPY", "LOCK",
+    "MKCOL", "MOVE", "PROPFIND", "PROPPATCH", "SEARCH", "UNLOCK", "BIND",
+    "REBIND", "UNBIND", "ACL", "REPORT", "MKACTIVITY", "CHECKOUT", "MERGE",
+    "M-SEARCH", "NOTIFY", "SUBSCRIBE", "UNSUBSCRIBE", "PATCH", "PURGE",
+    "MKCALENDAR", "LINK", "UNLINK", 0
+  };
+
+  const char **this_method;
+  for (this_method = all_methods; *this_method; this_method++) {
+    char buf[200];
+    sprintf(buf, "%s / HTTP/1.1\r\n\r\n", *this_method);
+
+    char testname[200];
+    snprintf(testname, sizeof(testname), "test_simple (Method: %s)", *this_method);
+    TEST_MESSAGE(testname);
+    test_simple(buf, HPE_OK);
+  }
+}
+
+void test_simple_bad_methods(){
+  static const char *bad_methods[] = {
+      "ASDF", "C******", "COLA", "GEM", "GETA", "M****", "MKCOLA",
+      "PROPPATCHA", "PUN", "PX", "SA", "hello world", 0
+  };
+  const char **this_method;
+  for (this_method = bad_methods; *this_method; this_method++) {
+    char buf[200];
+    sprintf(buf, "%s / HTTP/1.1\r\n\r\n", *this_method);
+
+    char testname[200];
+    snprintf(testname, sizeof(testname), "test_simple (Bad Method: %s)", *this_method);
+    TEST_MESSAGE(testname);
+    test_simple(buf, HPE_INVALID_METHOD);
+  }
+}
+
+void test_message_all_requests(){
+  for (int i = 0; i < ARRAY_SIZE(requests); i++) {
+    char testname[200];
+    snprintf(testname, sizeof(testname), "test_message (request %s)", requests[i].name);
+    TEST_MESSAGE(testname);
+    test_message(&requests[i]);
+    
+  }
+}
+
+void test_message_pause_all_requests(){
+for (int i = 0; i < ARRAY_SIZE(requests); i++) {
+  char testname[200];
+    snprintf(testname, sizeof(testname), "test_message_pause (request %s)", requests[i].name);
+    TEST_MESSAGE(testname);
+    test_message_pause(&requests[i]);
+  }
+}
+
+
+int
+main (void)
+{
+  // unsigned i, j, k;
+  // unsigned long version;
+  // unsigned major;
+  // unsigned minor;
+  // unsigned patch;
+
+  // version = http_parser_version();
+  // major = (version >> 16) & 255;
+  // minor = (version >> 8) & 255;
+  // patch = version & 255;
+  
+  UNITY_BEGIN();
+  RUN_TEST(test_preserve_data);
+  RUN_TEST(test_parse_url);
+  RUN_TEST(test_method_str);
+  RUN_TEST(test_status_str);
+  RUN_TEST(test_header_nread_value);
+  RUN_TEST(test_no_overflow_parse_url);
+  RUN_TEST(test_header_overflow_error_request);
+  RUN_TEST(test_no_overflow_long_body_request_1000);
+  RUN_TEST(test_no_overflow_long_body_request_100000);
+  RUN_TEST(test_header_overflow_error_response);
+  RUN_TEST(test_no_overflow_long_body_response_1000);
+  RUN_TEST(test_no_overflow_long_body_response_100000);
+  RUN_TEST(test_header_content_length_overflow_error);
+  RUN_TEST(test_chunk_content_length_overflow_error);
+  RUN_TEST(test_double_content_length_error_request);
+  RUN_TEST(test_chunked_content_length_error_request);
+  RUN_TEST(test_header_cr_no_lf_error_request);
+  RUN_TEST(test_invalid_header_field_token_error_request);
+  RUN_TEST(test_invalid_header_field_content_error_request);
+  RUN_TEST(test_double_content_length_error_response);
+  RUN_TEST(test_chunked_content_length_error_response);
+  RUN_TEST(test_header_cr_no_lf_error_response);
+  RUN_TEST(test_invalid_header_field_token_error_response);
+  RUN_TEST(test_invalid_header_field_content_error_response);
+  RUN_TEST(test_simple_type_content_length_empty);
+  RUN_TEST(test_simple_type_content_length_whitespace);
+  RUN_TEST(test_simple_type_content_length_space_in_value);
+  RUN_TEST(test_simple_type_content_length_space_in_value_2);
+  RUN_TEST(test_simple_type_content_length_body_after);
+  RUN_TEST(test_simple_type_content_length_crlf_after);
+  RUN_TEST(test_simple_type_invalid_http_version_htp);
+  RUN_TEST(test_simple_type_invalid_http_version_01_1);
+  RUN_TEST(test_simple_type_invalid_http_version_11_1);
+  RUN_TEST(test_simple_type_invalid_http_version_1_01);
+  RUN_TEST(test_simple_type_invalid_http_version_tab);
+  RUN_TEST(test_simple_type_invalid_http_version_leading_cr);
+  RUN_TEST(test_message_response_all);
+  RUN_TEST(test_message_pause_response_all);
+  RUN_TEST(test_message_connect_response_all);
+  RUN_TEST(test_multiple3_responses);
+  RUN_TEST(test_message_count_body_no_headers_no_body_404);
+  RUN_TEST(test_message_count_body_trailing_space_on_chunked_body);
+  RUN_TEST(test_message_count_body_large_chunked);
+  RUN_TEST(test_response_scan_1_2);
+  RUN_TEST(test_response_scan_2_2);
+  RUN_TEST(test_simple_get_ihttp_1_0);
+  RUN_TEST(test_simple_get_ice_1_0);
+  RUN_TEST(test_simple_get_htp_1_1);
+  RUN_TEST(test_simple_get_http_01_1);
+  RUN_TEST(test_simple_get_http_11_1);
+  RUN_TEST(test_simple_get_http_1_01);
+  RUN_TEST(test_simple_get_http_1_0_invalid_header_token_1);
+  RUN_TEST(test_simple_get_http_1_0_invalid_header_token_2);
+  RUN_TEST(test_simple_extended_characters_in_header);
+  RUN_TEST(test_simple_well_formed_but_incomplete);
+  RUN_TEST(test_simple_unknown_transfer_encoding_in_request);
+  RUN_TEST(test_simple_all_methods);
+  RUN_TEST(test_simple_bad_methods);
+  RUN_TEST(test_simple_illegal_header_field_name_line_folding);
+  RUN_TEST(test_simple_dumbluck2);
+  RUN_TEST(test_simple_corrupted_connection);
+  RUN_TEST(test_simple_corrupted_header_name);
+  RUN_TEST(test_message_all_requests);
+  RUN_TEST(test_message_pause_all_requests);
+
+  RUN_TEST(test_multiple3_requests);
+  RUN_TEST(test_request_scan_1_4);
+  RUN_TEST(test_request_scan_2_4);
+  RUN_TEST(test_request_scan_3_4);
+  RUN_TEST(test_request_scan_4_4);  
+  return UNITY_END();
+}
+
+
+void app_main() {
+    main();
+}
+
