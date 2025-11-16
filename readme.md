@@ -265,6 +265,15 @@ To specifically target the unit tests located in `test/test_http-parser-2.9.4/`:
 pio test -f test_http-parser-2.9.4
 ```
 
+# Coverage
+
+The native environment is the only one generating the coverage report
+
+```bash 
+gcovr -v --add-tracefile ".pio/tests/*.json" --html-details .report/details.html --root . --exclude test/.* --exclude .pio/.* --exclude lib/http-parser/contrib/.* --exclude lib/http-parser/test.c --exclude lib/http-parser/bench.c
+```
+
+
 ## Running Benchmarks
 
 To run the specific HTTP parser benchmarks and ensure all output is visible (as info messages are filtered by default in standard test runs), use the following command:
