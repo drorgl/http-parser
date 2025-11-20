@@ -26,6 +26,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include "unity.h"
+#include <ctype.h>
 
 #if defined(__APPLE__)
 # undef strlncpy
@@ -33,6 +34,7 @@
 
 void setUp(void) {
   // set stuff up here
+  http_parser_set_max_header_size(HTTP_MAX_HEADER_SIZE);
 }
 
 void tearDown(void) {
@@ -204,7 +206,7 @@ const struct message requests[] =
   ,.num_headers= 0
   ,.body= ""
   }
-
+  
 #define GET_NO_HEADERS_NO_BODY 4
 , {.name= "get no headers no body"
   ,.type= HTTP_REQUEST
@@ -1477,6 +1479,43 @@ const struct message requests[] =
     }
   ,.body= ""
   }
+
+
+
+#define FRAGMENT_WITH_QUERY_IN_HASH 61
+, {.name= "fragment with query in hash"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET /hello#?world=value HTTP/1.1\r\n\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= ""
+  ,.fragment= "?world=value"
+  ,.request_path= "/hello"
+  ,.request_url= "/hello#?world=value"
+  ,.num_headers= 0
+  ,.body= ""
+  }
+
+#define FRAGMENT_WITH_QUERY_IN_DOUBLEHASH 62
+, {.name= "fragment with query in hash"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET /hello##?world=value HTTP/1.1\r\n\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= ""
+  ,.fragment= "?world=value"
+  ,.request_path= "/hello"
+  ,.request_url= "/hello##?world=value"
+  ,.num_headers= 0
+  ,.body= ""
+  }
+
 };
 
 /* * R E S P O N S E S * */
@@ -2331,6 +2370,34 @@ strlncpy(char *dst, size_t len, const char *src, size_t n)
 
   assert(len > slen);
   return slen;
+}
+
+/* A snprintf-like function that filters out non-alphanumeric characters. */
+int safe_snprintf(char *dst, size_t size, char * src, size_t src_len) {
+  size_t i;
+  size_t dst_idx = 0;
+  
+  // Iterate through the source string up to its length or the destination buffer's capacity minus 1 for null terminator.
+  for (i = 0; i < src_len && dst_idx < size - 1; i++) {
+    // Check if the character is alphanumeric.
+    if (isalnum((unsigned char)src[i])) {
+      // If alphanumeric, copy it directly to the destination buffer.
+      dst[dst_idx++] = src[i];
+    } else {
+      // If not alphanumeric, format it as "0xHH" (hexadecimal representation).
+      // Ensure there's enough space for "0xHH" and the null terminator.
+      if (dst_idx + 4 < size) {
+        dst_idx += snprintf(dst + dst_idx, size - dst_idx, "0x%02X", (unsigned char)src[i]);
+      } else {
+        // Not enough space for the full hex representation, break the loop.
+        break;
+      }
+    }
+  }
+  // Null-terminate the destination string.
+  dst[dst_idx] = '\0';
+  // Return the number of characters written (excluding the null terminator).
+  return dst_idx;
 }
 
 int
@@ -3935,6 +4002,15 @@ void test_simple_type_content_length_crlf_after(void) {
       HTTP_REQUEST);
 }
 
+void test_whitespace_after_start_line_error(void) {
+  test_simple_type(
+      "GET /test HTTP/1.1  \r\n"
+      "Host: example.com\r\n"
+      "\r\n",
+      HPE_INVALID_VERSION,
+      HTTP_REQUEST);
+}
+
 void
 test_invalid_header_content (int req, const char* str)
 {
@@ -4618,6 +4694,18 @@ void test_simple_type_invalid_http_version_leading_cr(void) {
   test_simple_type("\rHTTP/1.1\t200 OK\r\n\r\n", HPE_INVALID_VERSION, HTTP_RESPONSE);
 }
 
+void test_simple_type_invalid_h_starting_method(void){
+  test_simple_type("HXA / HTTP/1.1\r\n\r\n", HPE_INVALID_CONSTANT, HTTP_BOTH);
+}
+
+void test_parser_distinguishes_head_method_from_http_response_start (void){
+  test_simple_type("HEAD / HTTP/1.1\r\n\r\n", HPE_OK, HTTP_BOTH);
+}
+
+void test_simple_type_invalid_http_version_lowercase_http(void) {
+  test_simple_type("GET /path http/1.1\r\n\r\n", HPE_INVALID_CONSTANT, HTTP_REQUEST);
+}
+
 
 void test_multiple3_responses(void) {
   unsigned int i, j, k;
@@ -5063,6 +5151,694 @@ void test_complex_upgrade_tls(void) {
                    HTTP_REQUEST);
 }
 
+void test_excessive_uri_length(void) {
+  http_parser parser;
+  http_parser_set_max_header_size(4 * 1024);
+  http_parser_init(&parser, HTTP_REQUEST);
+  size_t parsed;
+  char long_uri[8192]; // Max URI length is typically 8192 bytes
+  
+  // Construct a URI that exceeds typical limits
+  snprintf(long_uri, sizeof(long_uri), "GET /");
+  for (int i = 0; i < 8000; i++) { // 8000 'A's + "/ HTTP/1.1\r\n\r\n"
+      strcat(long_uri, "A");
+  }
+  strcat(long_uri, " HTTP/1.1\r\n\r\n");
+
+  parsed = http_parser_execute(&parser, &settings_null, long_uri, strlen(long_uri));
+
+  // Expect an error or truncated parsing due to excessive URI length
+  // The parser should not crash and ideally report an error like HPE_URI_TOO_LONG.
+  // If no specific URI overflow error, it should at least not parse the full length.
+  TEST_ASSERT_EQUAL(HPE_HEADER_OVERFLOW, HTTP_PARSER_ERRNO(&parser));
+  TEST_ASSERT_LESS_THAN( strlen(long_uri),  parsed );
+}
+
+
+
+
+
+// Test-specific parser to track header_state
+static http_parser test_parser;
+static int header_state_callback_count[10]; // Track callback counts for different header states
+
+void clear_state(void) {
+    memset(header_state_callback_count, 0, sizeof(header_state_callback_count));
+    http_parser_init(&test_parser, HTTP_REQUEST);
+}
+
+// Callback to track when we enter specific header states
+int header_state_test_cb(http_parser *p) {
+    // Track the header_state value
+    if (p->header_state >= 0 && p->header_state < 10) {
+        header_state_callback_count[p->header_state]++;
+    }
+    return 0;
+}
+
+
+// Test case for h_connection_keep_alive
+void test_connection_keep_alive_header_state(void) {
+    clear_state();
+    const char *request = "GET / HTTP/1.1\r\n"
+                         "Connection: keep-alive\r\n"
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully
+    TEST_ASSERT_EQUAL_STRING("keep-alive", 
+                                    http_should_keep_alive(&test_parser) ? "keep-alive" : "close");
+    
+    // The parser should have set the F_CONNECTION_KEEP_ALIVE flag
+    TEST_ASSERT_TRUE(test_parser.flags & F_CONNECTION_KEEP_ALIVE);
+}
+
+// Test case for h_connection_close
+void test_connection_close_header_state(void) {
+    clear_state();
+    const char *request = "GET / HTTP/1.1\r\n"
+                         "Connection: close\r\n"
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully
+    TEST_ASSERT_FALSE(http_should_keep_alive(&test_parser));
+    
+    // The parser should have set the F_CONNECTION_CLOSE flag
+    TEST_ASSERT_TRUE(test_parser.flags & F_CONNECTION_CLOSE);
+}
+
+// Test case for h_connection_upgrade
+void test_connection_upgrade_header_state(void) {
+    clear_state();
+
+    const char *request = "GET / HTTP/1.1\r\n"
+                         "Connection: upgrade\r\n"
+                         "Upgrade: websocket\r\n"
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully
+    TEST_ASSERT_TRUE(test_parser.upgrade);
+    
+    // The parser should have set the F_CONNECTION_UPGRADE flag
+    TEST_ASSERT_TRUE(test_parser.flags & F_CONNECTION_UPGRADE);
+}
+
+// Test case for h_transfer_encoding_chunked
+void test_transfer_encoding_chunked_header_state(void) {
+    clear_state();
+    const char *request = "POST / HTTP/1.1\r\n"
+                         "Transfer-Encoding: chunked\r\n"
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully
+    TEST_ASSERT_TRUE(test_parser.flags & F_CHUNKED);
+}
+
+// Test case for empty content length (should trigger error)
+void test_empty_content_length_header_state(void) {
+    clear_state();
+    const char *request = "POST / HTTP/1.1\r\n"
+                         "Content-Length:\r\n"
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // This should trigger an error due to empty content length
+    TEST_ASSERT_EQUAL(HPE_INVALID_CONTENT_LENGTH, HTTP_PARSER_ERRNO(&test_parser));
+}
+
+// Test case with whitespace after header value to trigger s_header_value_discard_lws
+void test_connection_keep_alive_with_trailing_whitespace(void) {
+    clear_state();
+    const char *request = "GET / HTTP/1.1\r\n"
+                         "Connection: keep-alive   \r\n"  // Trailing spaces
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully despite trailing whitespace
+    TEST_ASSERT_EQUAL_STRING("keep-alive", 
+                                    http_should_keep_alive(&test_parser) ? "keep-alive" : "close");
+    
+    // The parser should have set the F_CONNECTION_KEEP_ALIVE flag
+    TEST_ASSERT_TRUE(test_parser.flags & F_CONNECTION_KEEP_ALIVE);
+}
+
+void test_connection_close_with_trailing_whitespace(void) {
+    clear_state();
+    const char *request = "GET / HTTP/1.1\r\n"
+                         "Connection: close   \r\n"  // Trailing spaces
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully despite trailing whitespace
+    TEST_ASSERT_FALSE(http_should_keep_alive(&test_parser));
+    
+    // The parser should have set the F_CONNECTION_CLOSE flag
+    TEST_ASSERT_TRUE(test_parser.flags & F_CONNECTION_CLOSE);
+}
+
+void test_connection_upgrade_with_trailing_whitespace(void) {
+    clear_state();
+    const char *request = "GET / HTTP/1.1\r\n"
+                         "Connection: upgrade   \r\n"  // Trailing spaces
+                         "Upgrade: websocket\r\n"
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully despite trailing whitespace
+    TEST_ASSERT_TRUE(test_parser.upgrade);
+    
+    // The parser should have set the F_CONNECTION_UPGRADE flag
+    TEST_ASSERT_TRUE(test_parser.flags & F_CONNECTION_UPGRADE);
+}
+
+void test_transfer_encoding_chunked_with_trailing_whitespace(void) {
+    clear_state();
+    const char *request = "POST / HTTP/1.1\r\n"
+                         "Transfer-Encoding: chunked   \r\n"  // Trailing spaces
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully despite trailing whitespace
+    TEST_ASSERT_TRUE(test_parser.flags & F_CHUNKED);
+}
+
+// Test case with tabs as whitespace
+void test_connection_keep_alive_with_trailing_tabs(void) {
+    clear_state();
+    const char *request = "GET / HTTP/1.1\r\n"
+                         "Connection: keep-alive\t\t\r\n"  // Trailing tabs
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully despite trailing tabs
+    TEST_ASSERT_EQUAL_STRING("keep-alive", 
+                                    http_should_keep_alive(&test_parser) ? "keep-alive" : "close");
+    
+    // The parser should have set the F_CONNECTION_KEEP_ALIVE flag
+    TEST_ASSERT_TRUE(test_parser.flags & F_CONNECTION_KEEP_ALIVE);
+}
+
+void test_connection_close_with_trailing_tabs(void) {
+    clear_state();
+    const char *request = "GET / HTTP/1.1\r\n"
+                         "Connection: close\t\t\r\n"  // Trailing tabs
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully despite trailing tabs
+    TEST_ASSERT_FALSE(http_should_keep_alive(&test_parser));
+    
+    // The parser should have set the F_CONNECTION_CLOSE flag
+    TEST_ASSERT_TRUE(test_parser.flags & F_CONNECTION_CLOSE);
+}
+
+void test_connection_upgrade_with_trailing_tabs(void) {
+    clear_state();
+    const char *request = "GET / HTTP/1.1\r\n"
+                         "Connection: upgrade\t\t\r\n"  // Trailing tabs
+                         "Upgrade: websocket\r\n"
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully despite trailing tabs
+    TEST_ASSERT_TRUE(test_parser.upgrade);
+    
+    // The parser should have set the F_CONNECTION_UPGRADE flag
+    TEST_ASSERT_TRUE(test_parser.flags & F_CONNECTION_UPGRADE);
+}
+
+void test_transfer_encoding_chunked_with_trailing_tabs(void) {
+    clear_state();
+    const char *request = "POST / HTTP/1.1\r\n"
+                         "Transfer-Encoding: chunked\t\t\r\n"  // Trailing tabs
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully despite trailing tabs
+    TEST_ASSERT_TRUE(test_parser.flags & F_CHUNKED);
+}
+
+// Test case with mixed whitespace (spaces and tabs)
+void test_connection_keep_alive_with_mixed_trailing_whitespace(void) {
+    clear_state();
+    const char *request = "GET / HTTP/1.1\r\n"
+                         "Connection: keep-alive \t \r\n"  // Mixed trailing whitespace
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully despite mixed trailing whitespace
+    TEST_ASSERT_EQUAL_STRING("keep-alive", 
+                                    http_should_keep_alive(&test_parser) ? "keep-alive" : "close");
+    
+    // The parser should have set the F_CONNECTION_KEEP_ALIVE flag
+    TEST_ASSERT_TRUE(test_parser.flags & F_CONNECTION_KEEP_ALIVE);
+}
+
+void test_connection_close_with_mixed_trailing_whitespace(void) {
+    clear_state();
+    const char *request = "GET / HTTP/1.1\r\n"
+                         "Connection: close \t \r\n"  // Mixed trailing whitespace
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully despite mixed trailing whitespace
+    TEST_ASSERT_FALSE(http_should_keep_alive(&test_parser));
+    
+    // The parser should have set the F_CONNECTION_CLOSE flag
+    TEST_ASSERT_TRUE(test_parser.flags & F_CONNECTION_CLOSE);
+}
+
+void test_connection_upgrade_with_mixed_trailing_whitespace(void) {
+    clear_state();
+    const char *request = "GET / HTTP/1.1\r\n"
+                         "Connection: upgrade \t \r\n"  // Mixed trailing whitespace
+                         "Upgrade: websocket\r\n"
+                         "\r\n";
+    
+    http_parser_settings settings = {
+        .on_headers_complete = header_state_test_cb
+    };
+    
+    size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+    
+    // Verify the request was parsed successfully despite mixed trailing whitespace
+    TEST_ASSERT_TRUE(test_parser.upgrade);
+    
+    // The parser should have set the F_CONNECTION_UPGRADE flag
+    TEST_ASSERT_TRUE(test_parser.flags & F_CONNECTION_UPGRADE);
+}
+
+void test_transfer_encoding_chunked_with_mixed_trailing_whitespace(void) {
+  clear_state();
+  const char *request = "POST / HTTP/1.1\r\n"
+                       "Transfer-Encoding: chunked \t \r\n"  // Mixed trailing whitespace
+                       "\r\n";
+  
+  http_parser_settings settings = {
+      .on_headers_complete = header_state_test_cb
+  };
+  
+  size_t parsed = http_parser_execute(&test_parser, &settings, request, strlen(request));
+  
+  // Verify the request was parsed successfully despite mixed trailing whitespace
+  TEST_ASSERT_TRUE(test_parser.flags & F_CHUNKED);
+}
+
+// CRLF Injection Detection Tests
+// Critical security test to prevent HTTP response splitting attacks
+
+void test_crlf_injection_detection_request(void) {
+  // Test cases that should be REJECTED due to CRLF injection in requests
+  const char* crlf_injection_tests[] = {
+    // Basic CRLF injection in header value
+    "GET /test HTTP/1.1\r\n"
+    "Host: example.com\r\n"
+    "X-Header: value\r\nHTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n",
+    
+    // CRLF injection in header name
+    "GET /test HTTP/1.1\r\n"
+    "Host: example.com\r\n"
+    "X-Injected\r\n: malicious\r\n"
+    "Value: real\r\n\r\n",
+    
+    // Multiple CRLF sequences for response splitting
+    "GET /test HTTP/1.1\r\n"
+    "Host: example.com\r\n"
+    "Location: /redirect\r\n"
+    "HTTP/1.1 302 Found\r\n"
+    "Location: http://evil.com\r\n"
+    "Content-Type: text/html\r\n\r\n",
+    
+    // CRLF injection in User-Agent
+    "GET /test HTTP/1.1\r\n"
+    "User-Agent: Mozilla/5.0\r\n"
+    "X-Forwarded-For: 127.0.0.1\r\n"
+    "HTTP/1.1 200 OK\r\n"
+    "Set-Cookie: session=evil\r\n\r\n"
+  };
+  
+  for (int i = 0; i < ARRAY_SIZE(crlf_injection_tests); i++) {
+    TEST_MESSAGE(crlf_injection_tests[i]);
+    struct http_parser parser;
+    http_parser_init(&parser, HTTP_REQUEST);
+    size_t parsed = http_parser_execute(&parser, &settings_null, 
+                                        crlf_injection_tests[i], 
+                                        strlen(crlf_injection_tests[i]));
+    
+    // Should detect and reject CRLF injection attempts
+    TEST_ASSERT_TRUE(parsed < strlen(crlf_injection_tests[i]) || 
+                    HTTP_PARSER_ERRNO(&parser) == HPE_INVALID_HEADER_TOKEN);
+    // TEST_ASSERT_EQUAL(HPE_INVALID_HEADER_TOKEN, HTTP_PARSER_ERRNO(&parser));
+  }
+}
+
+void test_crlf_injection_detection_response(void) {
+  // Test cases that should be REJECTED due to CRLF injection in responses
+  const char* crlf_injection_tests[] = {
+    // Basic CRLF injection in response header
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/html\r\n"
+    "Set-Cookie: session=evil\r\nHTTP/1.1 302 Redirect\r\nLocation: http://evil.com\r\n\r\n",
+    
+    // CRLF injection in status line
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/html\r\n"
+    "HTTP/1.1 302 Found\r\n"
+    "Location: http://evil.com\r\n\r\n",
+    
+    // CRLF injection in response body
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/html\r\n"
+    "Content-Length: 25\r\n"
+    "\r\n"
+    "<html>Normal body</html>\r\n"
+    "HTTP/1.1 500 Error\r\n"
+    "Content-Type: text/plain\r\n"
+    "Internal Server Error\r\n\r\n",
+    
+    // Multiple CRLF sequences
+    "HTTP/1.1 200 OK\r\n"
+    "Server: Apache\r\n"
+    "X-Custom: value\r\n"
+    "HTTP/1.1 200 OK\r\n"
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/plain\r\n\r\n"
+  };
+  
+  for (int i = 0; i < 4; i++) {
+    struct http_parser parser;
+    http_parser_init(&parser, HTTP_RESPONSE);
+    size_t parsed = http_parser_execute(&parser, &settings_null, 
+                                        crlf_injection_tests[i], 
+                                        strlen(crlf_injection_tests[i]));
+    
+    // Should detect and reject CRLF injection attempts
+    TEST_ASSERT_TRUE(parsed < strlen(crlf_injection_tests[i]) || 
+                    HTTP_PARSER_ERRNO(&parser) == HPE_INVALID_HEADER_TOKEN);
+  }
+}
+
+void test_crlf_injection_header_splitting(void) {
+  // Test CRLF injection attempting to split headers across multiple lines
+  const char* header_splitting_tests[] = {
+    // Attempt to split header value across lines
+    "GET /test HTTP/1.1\r\n"
+    "Host: example.com\r\n"
+    "X-Custom: part1\r\n"
+    " part2\r\n"  // This should be treated as header folding, not injection
+    "X-Legitimate: value\r\n\r\n",
+    
+    // Malicious header splitting
+    "GET /test HTTP/1.1\r\n"
+    "Host: example.com\r\n"
+    "X-Injected\r\n"
+    "HTTP/1.1 200 OK\r\n"
+    "Set-Cookie: evil=value\r\n"
+    "X-Real: legitimate\r\n\r\n"
+  };
+  
+  // First test should pass (legitimate header folding)
+  {
+    struct http_parser parser;
+    http_parser_init(&parser, HTTP_REQUEST);
+    size_t parsed = http_parser_execute(&parser, &settings_null, 
+                                        header_splitting_tests[0], 
+                                        strlen(header_splitting_tests[0]));
+    
+    // Should parse successfully (legitimate header folding)
+    TEST_ASSERT_EQUAL(parsed, strlen(header_splitting_tests[0]));
+    TEST_ASSERT_EQUAL(HTTP_PARSER_ERRNO(&parser), HPE_OK);
+  }
+  
+  // Second test should fail (malicious header splitting)
+  {
+    struct http_parser parser;
+    http_parser_init(&parser, HTTP_REQUEST);
+    size_t parsed = http_parser_execute(&parser, &settings_null, 
+                                        header_splitting_tests[1], 
+                                        strlen(header_splitting_tests[1]));
+    
+    // Should detect malicious header splitting
+    TEST_ASSERT_TRUE(parsed < strlen(header_splitting_tests[1]) || 
+                    HTTP_PARSER_ERRNO(&parser) == HPE_INVALID_HEADER_TOKEN);
+  }
+}
+
+void test_crlf_injection_cache_poisoning(void) {
+  // Test CRLF injection attempts for cache poisoning attacks
+  const char* cache_poisoning_tests[] = {
+    // Vary header injection
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/html\r\n"
+    "Vary: Accept-Encoding\r\n"
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/css\r\n"
+    "Vary: Host\r\n\r\n",
+    
+    // Cache-Control injection
+    "HTTP/1.1 200 OK\r\n"
+    "Cache-Control: public, max-age=3600\r\n"
+    "HTTP/1.1 200 OK\r\n"
+    "Cache-Control: private, no-cache\r\n"
+    "Content-Type: text/html\r\n\r\n",
+    
+    // Expires header injection
+    "HTTP/1.1 200 OK\r\n"
+    "Expires: Thu, 01 Jan 2025 00:00:00 GMT\r\n"
+    "HTTP/1.1 200 OK\r\n"
+    "Expires: Thu, 01 Jan 1970 00:00:00 GMT\r\n"
+    "Content-Type: text/html\r\n\r\n"
+  };
+  
+  for (int i = 0; i < 3; i++) {
+    struct http_parser parser;
+    http_parser_init(&parser, HTTP_RESPONSE);
+    size_t parsed = http_parser_execute(&parser, &settings_null, 
+                                        cache_poisoning_tests[i], 
+                                        strlen(cache_poisoning_tests[i]));
+    
+    // Should detect cache poisoning attempts
+    TEST_ASSERT_TRUE(parsed < strlen(cache_poisoning_tests[i]) || 
+                    HTTP_PARSER_ERRNO(&parser) == HPE_INVALID_HEADER_TOKEN);
+  }
+}
+
+void test_crlf_injection_session_fixation(void) {
+  // Test CRLF injection attempts for session fixation attacks
+  const char* session_fixation_tests[] = {
+    // Set-Cookie injection
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: text/html\r\n"
+    "Set-Cookie: session=valid123\r\n"
+    "HTTP/1.1 200 OK\r\n"
+    "Set-Cookie: session=evil456\r\n"
+    "Domain: .example.com\r\n\r\n",
+    
+    // Authorization header injection
+    "GET /admin HTTP/1.1\r\n"
+    "Host: example.com\r\n"
+    "Authorization: Basic dXNlcjpwYXNz\r\n"
+    "HTTP/1.1 401 Unauthorized\r\n"
+    "WWW-Authenticate: Basic realm=admin\r\n\r\n",
+    
+    // Location header injection for open redirect
+    "HTTP/1.1 302 Found\r\n"
+    "Location: /welcome\r\n"
+    "HTTP/1.1 302 Found\r\n"
+    "Location: http://evil.com/redirect\r\n"
+    "Content-Type: text/html\r\n\r\n"
+  };
+  
+  // Test request-based session fixation
+  {
+    struct http_parser parser;
+    http_parser_init(&parser, HTTP_REQUEST);
+    size_t parsed = http_parser_execute(&parser, &settings_null, 
+                                        session_fixation_tests[1], 
+                                        strlen(session_fixation_tests[1]));
+    
+    // Should detect authorization header injection
+    TEST_ASSERT_TRUE(parsed < strlen(session_fixation_tests[1]) || 
+                    HTTP_PARSER_ERRNO(&parser) == HPE_INVALID_HEADER_TOKEN);
+  }
+  
+  // Test response-based session fixation
+  for (int i = 0; i < 3; i++) {
+    struct http_parser parser;
+    http_parser_init(&parser, HTTP_RESPONSE);
+    size_t parsed = http_parser_execute(&parser, &settings_null, 
+                                        session_fixation_tests[i], 
+                                        strlen(session_fixation_tests[i]));
+    
+    // Should detect session fixation attempts
+    TEST_ASSERT_TRUE(parsed < strlen(session_fixation_tests[i]) || 
+                    HTTP_PARSER_ERRNO(&parser) == HPE_INVALID_HEADER_TOKEN);
+  }
+}
+
+typedef struct {
+  const char* data;
+  size_t length;
+  enum http_errno expected_error;
+} string_with_len;
+
+// Test case for Null Byte Injection
+void test_http_parser_settings_init(void) {
+  http_parser_settings settings;
+  memset(&settings, 0xFF, sizeof(http_parser_settings)); // Fill with non-zero to ensure init sets to 0
+  http_parser_settings_init(&settings);
+
+  // Create a zero-initialized settings struct for comparison
+  http_parser_settings expected_settings;
+  memset(&expected_settings, 0, sizeof(http_parser_settings));
+
+  // Compare the initialized settings with the expected zero-initialized settings
+  TEST_ASSERT_EQUAL_MEMORY(&expected_settings, &settings, sizeof(http_parser_settings));
+}
+
+void test_http_errno_name(void) {
+  // Test a few representative error codes from different categories
+  TEST_ASSERT_EQUAL_STRING("HPE_OK", http_errno_name(HPE_OK));
+  TEST_ASSERT_EQUAL_STRING("HPE_CB_message_begin", http_errno_name(HPE_CB_message_begin)); // Callback error
+  TEST_ASSERT_EQUAL_STRING("HPE_INVALID_METHOD", http_errno_name(HPE_INVALID_METHOD));   // Parsing error
+  TEST_ASSERT_EQUAL_STRING("HPE_CLOSED_CONNECTION", http_errno_name(HPE_CLOSED_CONNECTION)); // Internal error
+  TEST_ASSERT_EQUAL_STRING("HPE_UNKNOWN", http_errno_name(HPE_UNKNOWN));          // Unknown error
+  TEST_ASSERT_EQUAL_STRING("HPE_STRICT", http_errno_name(HPE_STRICT));           // Strict mode error
+}
+
+void test_http_errno_description(void) {
+  // Test a few representative error codes from different categories
+  TEST_ASSERT_EQUAL_STRING("success", http_errno_description(HPE_OK));
+  TEST_ASSERT_EQUAL_STRING("the on_message_begin callback failed", http_errno_description(HPE_CB_message_begin)); // Callback error
+  TEST_ASSERT_EQUAL_STRING("invalid HTTP method", http_errno_description(HPE_INVALID_METHOD));   // Parsing error
+  TEST_ASSERT_EQUAL_STRING("data received after completed connection: close message", http_errno_description(HPE_CLOSED_CONNECTION)); // Internal error
+  TEST_ASSERT_EQUAL_STRING("an unknown error occurred", http_errno_description(HPE_UNKNOWN));          // Unknown error
+  TEST_ASSERT_EQUAL_STRING("strict mode assertion failed", http_errno_description(HPE_STRICT));           // Strict mode error
+}
+
+void test_null_byte_injection(void)
+{
+  string_with_len null_byte_tests[] = {
+      {"GET /test\x00injection HTTP/1.1\r\nHost: example.com\r\n\r\n",
+       sizeof("GET /test\x00injection HTTP/1.1\r\nHost: example.com\r\n\r\n") - 1,
+      HPE_INVALID_URL},
+      {"GET /test HTTP/1.1\r\nHost: example.com\r\nX-Header\x00Name: value\r\n\r\n",
+       sizeof("GET /test HTTP/1.1\r\nHost: example.com\r\nX-Header\x00Name: value\r\n\r\n") - 1,
+      HPE_INVALID_HEADER_TOKEN},
+      {"GET /test HTTP/1.1\r\nHost: example.com\r\nX-Header: value\x00injection\r\n\r\n",
+       sizeof("GET /test HTTP/1.1\r\nHost: example.com\r\nX-Header: value\x00injection\r\n\r\n") - 1,
+      HPE_INVALID_HEADER_TOKEN},
+      {"GET\x00 /test HTTP/1.1\r\nHost: example.com\r\n\r\n",
+       sizeof("GET\x00 /test HTTP/1.1\r\nHost: example.com\r\n\r\n") - 1,
+      HPE_INVALID_METHOD},
+      {"GET /test HTTP/1.1\x00\r\nHost: example.com\r\n\r\n",
+       sizeof("GET /test HTTP/1.1\x00\r\nHost: example.com\r\n\r\n") - 1,
+      HPE_INVALID_VERSION},
+  };
+
+  for (int i = 0; i < ARRAY_SIZE(null_byte_tests); i++)
+  {
+    char cleaned_message[2048]; // Buffer for the cleaned message
+
+    safe_snprintf(cleaned_message, sizeof(cleaned_message), null_byte_tests[i].data, null_byte_tests[i].length);
+    TEST_MESSAGE(cleaned_message);
+
+    struct http_parser parser;
+    http_parser_init(&parser, HTTP_REQUEST);
+
+    size_t parsed = http_parser_execute(&parser, &settings_null,
+                                        null_byte_tests[i].data,
+                                        null_byte_tests[i].length);
+
+    // Expect an error or truncated parsing due to null byte
+    // The parser should not crash and ideally report an error.
+    // HPE_INVALID_HEADER_TOKEN is a common error for malformed headers.
+    // HPE_INVALID_URL for malformed URLs.
+    // For null bytes, the parser might stop parsing at the null byte,
+    // so `parsed` might be less than `test_len`.
+    TEST_ASSERT_EQUAL(null_byte_tests[i].expected_error, HTTP_PARSER_ERRNO(&parser));
+    TEST_ASSERT_TRUE(HTTP_PARSER_ERRNO(&parser) != HPE_OK || parsed < null_byte_tests[i].length);
+  }
+}
+
 int
 main (void)
 {
@@ -5072,16 +5848,20 @@ main (void)
   // unsigned minor;
   // unsigned patch;
 
-  // version = http_parser_version();
-  // major = (version >> 16) & 255;
-  // minor = (version >> 8) & 255;
-  // patch = version & 255;
+  const unsigned long version = http_parser_version();
+  const unsigned int major = (version >> 16) & 255;
+  const unsigned int minor = (version >> 8) & 255;
+  const unsigned int patch = version & 255;
+  printf("Testing %d.%d.%d\n", major, minor, patch);
   
   UNITY_BEGIN();
   RUN_TEST(test_preserve_data);
   RUN_TEST(test_parse_url);
   RUN_TEST(test_method_str);
   RUN_TEST(test_status_str);
+  RUN_TEST(test_http_parser_settings_init);
+  RUN_TEST(test_http_errno_name);
+  RUN_TEST(test_http_errno_description);
   RUN_TEST(test_header_nread_value);
   RUN_TEST(test_no_overflow_parse_url);
   RUN_TEST(test_header_overflow_error_request);
@@ -5108,12 +5888,14 @@ main (void)
   RUN_TEST(test_simple_type_content_length_space_in_value_2);
   RUN_TEST(test_simple_type_content_length_body_after);
   RUN_TEST(test_simple_type_content_length_crlf_after);
+  RUN_TEST(test_whitespace_after_start_line_error);
   RUN_TEST(test_simple_type_invalid_http_version_htp);
   RUN_TEST(test_simple_type_invalid_http_version_01_1);
   RUN_TEST(test_simple_type_invalid_http_version_11_1);
   RUN_TEST(test_simple_type_invalid_http_version_1_01);
   RUN_TEST(test_simple_type_invalid_http_version_tab);
   RUN_TEST(test_simple_type_invalid_http_version_leading_cr);
+  RUN_TEST(test_simple_type_invalid_http_version_lowercase_http);
   RUN_TEST(test_message_response_all);
   RUN_TEST(test_message_pause_response_all);
   RUN_TEST(test_message_connect_response_all);
@@ -5139,6 +5921,8 @@ main (void)
   RUN_TEST(test_simple_all_methods);
   RUN_TEST(test_simple_bad_methods);
   RUN_TEST(test_simple_illegal_header_field_name_line_folding);
+  RUN_TEST(test_simple_type_invalid_h_starting_method);
+  RUN_TEST(test_parser_distinguishes_head_method_from_http_response_start );
 #ifndef ESP_PLATFORM
   RUN_TEST(test_simple_dumbluck2);
 #endif
@@ -5162,7 +5946,34 @@ main (void)
   RUN_TEST(test_invalid_data_mid_message);
   RUN_TEST(test_malformed_scheme_url);
   RUN_TEST(test_complex_upgrade_tls);
-  
+  RUN_TEST(test_excessive_uri_length);
+
+  RUN_TEST(test_connection_keep_alive_header_state);
+  RUN_TEST(test_connection_close_header_state);
+  RUN_TEST(test_connection_upgrade_header_state);
+  RUN_TEST(test_transfer_encoding_chunked_header_state);
+  RUN_TEST(test_empty_content_length_header_state);
+  RUN_TEST(test_connection_keep_alive_with_trailing_whitespace);
+  RUN_TEST(test_connection_close_with_trailing_whitespace);
+  RUN_TEST(test_connection_upgrade_with_trailing_whitespace);
+  RUN_TEST(test_transfer_encoding_chunked_with_trailing_whitespace);
+  RUN_TEST(test_connection_keep_alive_with_trailing_tabs);
+  RUN_TEST(test_connection_close_with_trailing_tabs);
+  RUN_TEST(test_connection_upgrade_with_trailing_tabs);
+  RUN_TEST(test_transfer_encoding_chunked_with_trailing_tabs);
+  RUN_TEST(test_connection_keep_alive_with_mixed_trailing_whitespace);
+  RUN_TEST(test_connection_close_with_mixed_trailing_whitespace);
+  RUN_TEST(test_connection_upgrade_with_mixed_trailing_whitespace);
+  RUN_TEST(test_transfer_encoding_chunked_with_mixed_trailing_whitespace);
+
+  RUN_TEST(test_crlf_injection_detection_request);
+  RUN_TEST(test_crlf_injection_detection_response);
+  RUN_TEST(test_crlf_injection_header_splitting);
+  RUN_TEST(test_crlf_injection_cache_poisoning);
+  RUN_TEST(test_crlf_injection_session_fixation);
+  RUN_TEST(test_null_byte_injection);
+
+
   return UNITY_END();
 }
 
@@ -5170,4 +5981,3 @@ main (void)
 void app_main() {
     main();
 }
-

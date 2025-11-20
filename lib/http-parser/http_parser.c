@@ -1667,7 +1667,7 @@ reexecute:
               break;
 
             case h_transfer_encoding_chunked:
-              if (ch != ' ') h_state = h_matching_transfer_encoding_token;
+              if (ch != ' ' && ch != '\t') h_state = h_matching_transfer_encoding_token;
               break;
 
             case h_connection_keep_alive:
@@ -1683,7 +1683,7 @@ reexecute:
                 }
                 h_state = h_matching_connection_token_start;
                 parser->index = 0;
-              } else if (ch != ' ') {
+              } else if (ch != ' ' && ch != '\t') {
                 h_state = h_matching_connection_token;
               }
               break;
